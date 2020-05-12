@@ -15,10 +15,10 @@
  * =============================================================================
  */
 
-import {DataType, InferenceModel, MetaGraph, ModelPredictConfig, ModelTensorInfo, NamedTensorMap, SignatureDef, Tensor, util} from '@tensorflow/tfjs';
+import { DataType, InferenceModel, MetaGraph, ModelPredictConfig, ModelTensorInfo, NamedTensorMap, SignatureDef, Tensor, util } from '@tensorflow/tfjs';
 import * as fs from 'fs';
-import {promisify} from 'util';
-import {ensureTensorflowBackend, nodeBackend, NodeJSKernelBackend} from './nodejs_kernel_backend';
+import { promisify } from 'util';
+import { ensureTensorflowBackend, nodeBackend, NodeJSKernelBackend } from './nodejs_kernel_backend';
 
 const readFile = promisify(fs.readFile);
 
@@ -36,7 +36,7 @@ const SAVED_MODEL_INIT_OP_KEY = '__saved_model_init_op';
 // entries in this map to find if the corresponding SavedModel session has
 // already been loaded in C++ addon and will reuse it if existing.
 const loadedSavedModelPathMap =
-    new Map<number, {path: string, tags: string[], sessionId: number}>();
+  new Map<number, { path: string, tags: string[], sessionId: number }>();
 
 // The ID of loaded TFSavedModel. This ID is used to keep track of loaded
 // TFSavedModel, so the loaded session in c++ bindings for the corresponding
@@ -52,7 +52,7 @@ let nextTFSavedModelId = 0;
  */
 // tslint:disable-next-line:no-any
 export function getEnumKeyFromValue(object: any, value: number): string {
-  return Object.keys(object).find(key => object[key] === value);
+  return Object.keys(object).find(key => object[ key ] === value);
 }
 
 /**
@@ -66,7 +66,7 @@ export async function readSavedModelProto(path: string) {
     fs.accessSync(path + SAVED_MODEL_FILE_NAME, fs.constants.R_OK);
   } catch (error) {
     throw new Error(
-        'There is no saved_model.pb file in the directory: ' + path);
+      'There is no saved_model.pb file in the directory: ' + path);
   }
   const modelFile = await readFile(path + SAVED_MODEL_FILE_NAME);
   const array = new Uint8Array(modelFile);
@@ -83,7 +83,7 @@ export async function readSavedModelProto(path: string) {
  * @doc {heading: 'Models', subheading: 'SavedModel', namespace: 'node'}
  */
 export async function getMetaGraphsFromSavedModel(path: string):
-    Promise<MetaGraph[]> {
+  Promise<MetaGraph[]> {
   const result: MetaGraph[] = [];
 
   // Get SavedModel proto message
@@ -94,12 +94,12 @@ export async function getMetaGraphsFromSavedModel(path: string):
   const metaGraphList = modelMessage.getMetaGraphsList();
   for (let i = 0; i < metaGraphList.length; i++) {
     const metaGraph = {} as MetaGraph;
-    const tags = metaGraphList[i].getMetaInfoDef().getTagsList();
+    const tags = metaGraphList[ i ].getMetaInfoDef().getTagsList();
     metaGraph.tags = tags;
 
     // Each MetaGraph has it's own signatureDefs map.
     const signatureDef: SignatureDef = {};
-    const signatureDefMap = metaGraphList[i].getSignatureDefMap();
+    const signatureDefMap = metaGraphList[ i ].getSignatureDefMap();
     const signatureDefKeys = signatureDefMap.keys();
 
     // Go through all signatureDefs
@@ -117,7 +117,7 @@ export async function getMetaGraphsFromSavedModel(path: string):
       // Get all input tensors information
       const inputsMapMessage = signatureDefEntry.getInputsMap();
       const inputsMapKeys = inputsMapMessage.keys();
-      const inputs: {[key: string]: ModelTensorInfo} = {};
+      const inputs: { [ key: string ]: ModelTensorInfo } = {};
       while (true) {
         const inputsMapKey = inputsMapKeys.next();
         if (inputsMapKey.done) {
@@ -126,17 +126,17 @@ export async function getMetaGraphsFromSavedModel(path: string):
         const inputTensor = inputsMapMessage.get(inputsMapKey.value);
         const inputTensorInfo = {} as ModelTensorInfo;
         inputTensorInfo.dtype = mapTFDtypeToJSDtype(
-            getEnumKeyFromValue(messages.DataType, inputTensor.getDtype()));
+          getEnumKeyFromValue(messages.DataType, inputTensor.getDtype()));
 
         inputTensorInfo.name = inputTensor.getName();
         inputTensorInfo.shape = inputTensor.getTensorShape().getDimList();
-        inputs[inputsMapKey.value] = inputTensorInfo;
+        inputs[ inputsMapKey.value ] = inputTensorInfo;
       }
 
       // Get all output tensors information
       const outputsMapMessage = signatureDefEntry.getOutputsMap();
       const outputsMapKeys = outputsMapMessage.keys();
-      const outputs: {[key: string]: ModelTensorInfo} = {};
+      const outputs: { [ key: string ]: ModelTensorInfo } = {};
       while (true) {
         const outputsMapKey = outputsMapKeys.next();
         if (outputsMapKey.done) {
@@ -145,13 +145,13 @@ export async function getMetaGraphsFromSavedModel(path: string):
         const outputTensor = outputsMapMessage.get(outputsMapKey.value);
         const outputTensorInfo = {} as ModelTensorInfo;
         outputTensorInfo.dtype = mapTFDtypeToJSDtype(
-            getEnumKeyFromValue(messages.DataType, outputTensor.getDtype()));
+          getEnumKeyFromValue(messages.DataType, outputTensor.getDtype()));
         outputTensorInfo.name = outputTensor.getName();
         outputTensorInfo.shape = outputTensor.getTensorShape().getDimList();
-        outputs[outputsMapKey.value] = outputTensorInfo;
+        outputs[ outputsMapKey.value ] = outputTensorInfo;
       }
 
-      signatureDef[key.value] = {inputs, outputs};
+      signatureDef[ key.value ] = { inputs, outputs };
     }
     metaGraph.signatureDefs = signatureDef;
 
@@ -170,30 +170,30 @@ export async function getMetaGraphsFromSavedModel(path: string):
  * @param signature The signature to get input/output node names from.
  */
 export function getInputAndOutputNodeNameFromMetaGraphInfo(
-    savedModelInfo: MetaGraph[], tags: string[], signature: string) {
+  savedModelInfo: MetaGraph[], tags: string[], signature: string) {
   for (let i = 0; i < savedModelInfo.length; i++) {
-    const metaGraphInfo = savedModelInfo[i];
+    const metaGraphInfo = savedModelInfo[ i ];
     if (stringArraysHaveSameElements(tags, metaGraphInfo.tags)) {
-      if (metaGraphInfo.signatureDefs[signature] == null) {
+      if (metaGraphInfo.signatureDefs[ signature ] == null) {
         throw new Error('The SavedModel does not have signature: ' + signature);
       }
-      const inputNodeNames: {[key: string]: string} = {};
-      const outputNodeNames: {[key: string]: string} = {};
+      const inputNodeNames: { [ key: string ]: string } = {};
+      const outputNodeNames: { [ key: string ]: string } = {};
       for (const signatureDef of Object.keys(metaGraphInfo.signatureDefs)) {
         if (signatureDef === signature) {
           for (const tensorName of Object.keys(
-                   metaGraphInfo.signatureDefs[signature].inputs)) {
-            inputNodeNames[tensorName] =
-                metaGraphInfo.signatureDefs[signature].inputs[tensorName].name;
+            metaGraphInfo.signatureDefs[ signature ].inputs)) {
+            inputNodeNames[ tensorName ] =
+              metaGraphInfo.signatureDefs[ signature ].inputs[ tensorName ].name;
           }
           for (const tensorName of Object.keys(
-                   metaGraphInfo.signatureDefs[signature].outputs)) {
-            outputNodeNames[tensorName] =
-                metaGraphInfo.signatureDefs[signature].outputs[tensorName].name;
+            metaGraphInfo.signatureDefs[ signature ].outputs)) {
+            outputNodeNames[ tensorName ] =
+              metaGraphInfo.signatureDefs[ signature ].outputs[ tensorName ].name;
           }
         }
       }
-      return [inputNodeNames, outputNodeNames];
+      return [ inputNodeNames, outputNodeNames ];
     }
   }
   throw new Error(`The SavedModel does not have tags: ${tags}`);
@@ -206,14 +206,14 @@ export function getInputAndOutputNodeNameFromMetaGraphInfo(
 /**
  * @doc {heading: 'Models', subheading: 'SavedModel', namespace: 'node'}
  */
-export class TFSavedModel implements InferenceModel {
+export class TFSavedModel {
   private disposed = false;
 
   constructor(
-      private sessionId: number, private jsid: number,
-      private inputNodeNames: {[key: string]: string},
-      private outputNodeNames: {[key: string]: string},
-      private backend: NodeJSKernelBackend) {}
+    private sessionId: number, private jsid: number,
+    private inputNodeNames: { [ key: string ]: string },
+    private outputNodeNames: { [ key: string ]: string },
+    private backend: NodeJSKernelBackend) { }
 
   /**
    * Return the array of input tensor info.
@@ -276,55 +276,55 @@ export class TFSavedModel implements InferenceModel {
    * be returned for model with multiple outputs.
    */
   /** @doc {heading: 'Models', subheading: 'SavedModel'} */
-  predict(inputs: Tensor|Tensor[]|NamedTensorMap, config?: ModelPredictConfig):
-      Tensor|Tensor[]|NamedTensorMap {
+  predict(inputs: Tensor | Tensor[] | NamedTensorMap, cb: (r: Tensor | Tensor[] | NamedTensorMap) => void): void {
     if (this.disposed) {
       throw new Error('The TFSavedModel has already been deleted!');
     } else {
       let inputTensors: Tensor[] = [];
       if (inputs instanceof Tensor) {
         inputTensors.push(inputs);
-        const result = this.backend.runSavedModel(
-            this.sessionId, inputTensors, Object.values(this.inputNodeNames),
-            Object.values(this.outputNodeNames));
-        return result.length > 1 ? result : result[0];
+        this.backend.runSavedModel(
+          this.sessionId, inputTensors, Object.values(this.inputNodeNames),
+          Object.values(this.outputNodeNames), result => cb(result.length > 1 ? result : result[ 0 ]));
+        // return result.length > 1 ? result : result[0];
       } else if (Array.isArray(inputs)) {
         inputTensors = inputs;
-        return this.backend.runSavedModel(
-            this.sessionId, inputTensors, Object.values(this.inputNodeNames),
-            Object.values(this.outputNodeNames));
+        this.backend.runSavedModel(
+          this.sessionId, inputTensors, Object.values(this.inputNodeNames),
+          Object.values(this.outputNodeNames), cb);
       } else {
         const inputTensorNames = Object.keys(this.inputNodeNames);
         const providedInputNames = Object.keys(inputs);
         if (!stringArraysHaveSameElements(
-                inputTensorNames, providedInputNames)) {
+          inputTensorNames, providedInputNames)) {
           throw new Error(`The model signatureDef input names are ${
-              inputTensorNames.join()}, however the provided input names are ${
-              providedInputNames.join()}.`);
+            inputTensorNames.join()}, however the provided input names are ${
+            providedInputNames.join()}.`);
         }
         const inputNodeNamesArray = [];
         for (let i = 0; i < inputTensorNames.length; i++) {
-          inputTensors.push(inputs[inputTensorNames[i]]);
-          inputNodeNamesArray.push(this.inputNodeNames[inputTensorNames[i]]);
+          inputTensors.push(inputs[ inputTensorNames[ i ] ]);
+          inputNodeNamesArray.push(this.inputNodeNames[ inputTensorNames[ i ] ]);
         }
         const outputTensorNames = Object.keys(this.outputNodeNames);
         const outputNodeNamesArray = [];
         for (let i = 0; i < outputTensorNames.length; i++) {
-          outputNodeNamesArray.push(this.outputNodeNames[outputTensorNames[i]]);
+          outputNodeNamesArray.push(this.outputNodeNames[ outputTensorNames[ i ] ]);
         }
-        const outputTensors = this.backend.runSavedModel(
-            this.sessionId, inputTensors, inputNodeNamesArray,
-            outputNodeNamesArray);
-        util.assert(
-            outputTensors.length === outputNodeNamesArray.length,
-            () => 'Output tensors do not match output node names, ' +
-                `receive ${outputTensors.length}) output tensors but ` +
+        this.backend.runSavedModel(
+          this.sessionId, inputTensors, inputNodeNamesArray,
+          outputNodeNamesArray, result => {
+            util.assert(
+              result.length === outputNodeNamesArray.length,
+              () => 'Output tensors do not match output node names, ' +
+                `receive ${result.length}) output tensors but ` +
                 `there are ${this.outputNodeNames.length} output nodes.`);
-        const outputMap: NamedTensorMap = {};
-        for (let i = 0; i < outputTensorNames.length; i++) {
-          outputMap[outputTensorNames[i]] = outputTensors[i];
-        }
-        return outputMap;
+            const outputMap: NamedTensorMap = {};
+            for (let i = 0; i < outputTensorNames.length; i++) {
+              outputMap[ outputTensorNames[ i ] ] = result[ i ];
+            }
+            return cb(outputMap);
+          });
       }
     }
   }
@@ -347,8 +347,8 @@ export class TFSavedModel implements InferenceModel {
    * outputs.
    */
   /** @doc {heading: 'Models', subheading: 'SavedModel'} */
-  execute(inputs: Tensor|Tensor[]|NamedTensorMap, outputs: string|string[]):
-      Tensor|Tensor[] {
+  execute(inputs: Tensor | Tensor[] | NamedTensorMap, outputs: string | string[]):
+    Tensor | Tensor[] {
     throw new Error('execute() of TFSavedModel is not supported yet.');
   }
 }
@@ -362,7 +362,7 @@ export class TFSavedModel implements InferenceModel {
  * function. The directory also has a variables directory contains a standard
  * training checkpoint. The directory may also has a assets directory contains
  * files used by the TensorFlow graph, for example text files used to initialize
- * vocabulary tables. These are supported datatypes: float32, int32, complex64, 
+ * vocabulary tables. These are supported datatypes: float32, int32, complex64,
  * string.For more information, see this guide:
  * https://www.tensorflow.org/guide/saved_model.
  *
@@ -376,23 +376,23 @@ export class TFSavedModel implements InferenceModel {
  */
 /** @doc {heading: 'Models', subheading: 'SavedModel', namespace: 'node'} */
 export async function loadSavedModel(
-    path: string, tags = ['serve'],
-    signature = 'serving_default'): Promise<TFSavedModel> {
+  path: string, tags = [ 'serve' ],
+  signature = 'serving_default'): Promise<TFSavedModel> {
   ensureTensorflowBackend();
 
   const backend = nodeBackend();
 
   const savedModelInfo = await getMetaGraphsFromSavedModel(path);
-  const [inputNodeNames, outputNodeNames] =
-      getInputAndOutputNodeNameFromMetaGraphInfo(
-          savedModelInfo, tags, signature);
+  const [ inputNodeNames, outputNodeNames ] =
+    getInputAndOutputNodeNameFromMetaGraphInfo(
+      savedModelInfo, tags, signature);
 
   let sessionId: number;
 
   for (const id of Array.from(loadedSavedModelPathMap.keys())) {
     const modelInfo = loadedSavedModelPathMap.get(id);
     if (modelInfo.path === path &&
-        stringArraysHaveSameElements(modelInfo.tags, tags)) {
+      stringArraysHaveSameElements(modelInfo.tags, tags)) {
       sessionId = modelInfo.sessionId;
     }
   }
@@ -403,8 +403,8 @@ export async function loadSavedModel(
   }
   const id = nextTFSavedModelId++;
   const savedModel =
-      new TFSavedModel(sessionId, id, inputNodeNames, outputNodeNames, backend);
-  loadedSavedModelPathMap.set(id, {path, tags, sessionId});
+    new TFSavedModel(sessionId, id, inputNodeNames, outputNodeNames, backend);
+  loadedSavedModelPathMap.set(id, { path, tags, sessionId });
   return savedModel;
 }
 
@@ -414,9 +414,9 @@ export async function loadSavedModel(
  * @param arrayB
  */
 function stringArraysHaveSameElements(
-    arrayA: string[], arrayB: string[]): boolean {
+  arrayA: string[], arrayB: string[]): boolean {
   if (arrayA.length === arrayB.length &&
-      arrayA.sort().join() === arrayB.sort().join()) {
+    arrayA.sort().join() === arrayB.sort().join()) {
     return true;
   }
   return false;
@@ -435,8 +435,8 @@ function mapTFDtypeToJSDtype(tfDtype: string): DataType {
     case 'DT_STRING':
       return 'string';
     default:
-      throw new Error('Unsupported tensor DataType: ' + tfDtype + 
-           ', try to modify the model in python to convert the datatype' );
+      throw new Error('Unsupported tensor DataType: ' + tfDtype +
+        ', try to modify the model in python to convert the datatype');
   }
 }
 

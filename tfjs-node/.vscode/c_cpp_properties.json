@@ -5,9 +5,9 @@
       "includePath": [
         "${workspaceFolder}",
         "${workspaceFolder}/deps/include",
-        "${workspaceFolder}/deps/tensorflow/include/tensorflow/c",
-        "${workspaceFolder}/deps/tensorflow/include/tensorflow/c/eager",
-        "${env.HOME}/.node-gyp/10.15.3/include/node"
+        "${workspaceFolder}/deps/include/tensorflow/c",
+        "${workspaceFolder}/deps/include/tensorflow/c/eager",
+        "/Users/pierric/Library/Caches/node-gyp/10.15.3/include/node"
       ],
       "defines": [],
       "intelliSenseMode": "clang-x64",
@@ -15,9 +15,9 @@
         "path": [
           "${workspaceFolder}",
           "${workspaceFolder}/deps/include",
-          "${workspaceFolder}/deps/tensorflow/include/tensorflow/c",
-          "${workspaceFolder}/deps/tensorflow/include/tensorflow/c/eager",
-          "${env.HOME}/.node-gyp/10.15.3/include/node"
+          "${workspaceFolder}/deps/include/tensorflow/c",
+          "${workspaceFolder}/deps/include/tensorflow/c/eager",
+          "/Users/pierric/Library/Caches/node-gyp/10.15.3/include/node"
         ],
         "limitSymbolsToIncludedHeaders": true,
         "databaseFilename": ""

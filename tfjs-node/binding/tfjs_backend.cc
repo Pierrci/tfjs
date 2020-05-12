@@ -22,26 +22,31 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <thread>
 #include "napi_auto_ref.h"
 #include "tf_auto_tensor.h"
 #include "tfe_auto_op.h"
 #include "utils.h"
 
-namespace tfnodejs {
+namespace tfnodejs
+{
 
 // Used to hold strings beyond the lifetime of a JS call.
 static std::set<std::string> ATTR_NAME_SET;
 
 // Callback to cleanup extra reference count for shared V8/TF tensor memory:
-static void DeallocTensor(void *data, size_t len, void *arg) {
+static void DeallocTensor(void *data, size_t len, void *arg)
+{
   NapiAutoRef *auto_ref = static_cast<NapiAutoRef *>(arg);
-  if (!auto_ref) {
+  if (!auto_ref)
+  {
 #if DEBUG
     fprintf(stderr, "Invalid NapiAutoRef reference passed to V8 cleanup\n");
 #endif
     return;
   }
-  if (auto_ref->Cleanup() != napi_ok) {
+  if (auto_ref->Cleanup() != napi_ok)
+  {
 #if DEBUG
     fprintf(stderr, "Exception cleaning up napi_ref instance\n");
 #endif
@@ -54,7 +59,8 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromTypedArray(napi_env env,
                                                        int64_t *shape,
                                                        uint32_t shape_length,
                                                        TF_DataType dtype,
-                                                       napi_value array_value) {
+                                                       napi_value array_value)
+{
   napi_status nstatus;
   napi_typedarray_type array_type;
   size_t array_length;
@@ -67,42 +73,48 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromTypedArray(napi_env env,
   // Double check the underlying TF_Tensor type matches the supplied
   // typed-array.
   size_t width = 0;
-  switch (array_type) {
-    case napi_float32_array:
-      if (dtype != TF_FLOAT) {
-        NAPI_THROW_ERROR(env, "Tensor type does not match Float32Array");
-        return nullptr;
-      }
-      width = sizeof(float);
-      break;
-    case napi_int32_array:
-      if (dtype != TF_INT32 && dtype != TF_INT64) {
-        // Currently, both int32- and int64-type Tensors are represented
-        // as Int32Arrays in JavaScript. See int64_tensors.ts for details
-        // about the latter.
-        NAPI_THROW_ERROR(env, "Tensor type does not match Int32Array");
-        return nullptr;
-      }
-      width = sizeof(int32_t);
-      break;
-    case napi_uint8_array:
-      if (dtype != TF_BOOL && dtype != TF_UINT8) {
-        NAPI_THROW_ERROR(env, "Tensor type does not match Uint8Array");
-        return nullptr;
-      }
-      width = sizeof(uint8_t);
-      break;
-    default:
-      REPORT_UNKNOWN_TYPED_ARRAY_TYPE(env, array_type);
+  switch (array_type)
+  {
+  case napi_float32_array:
+    if (dtype != TF_FLOAT)
+    {
+      NAPI_THROW_ERROR(env, "Tensor type does not match Float32Array");
       return nullptr;
+    }
+    width = sizeof(float);
+    break;
+  case napi_int32_array:
+    if (dtype != TF_INT32 && dtype != TF_INT64)
+    {
+      // Currently, both int32- and int64-type Tensors are represented
+      // as Int32Arrays in JavaScript. See int64_tensors.ts for details
+      // about the latter.
+      NAPI_THROW_ERROR(env, "Tensor type does not match Int32Array");
+      return nullptr;
+    }
+    width = sizeof(int32_t);
+    break;
+  case napi_uint8_array:
+    if (dtype != TF_BOOL && dtype != TF_UINT8)
+    {
+      NAPI_THROW_ERROR(env, "Tensor type does not match Uint8Array");
+      return nullptr;
+    }
+    width = sizeof(uint8_t);
+    break;
+  default:
+    REPORT_UNKNOWN_TYPED_ARRAY_TYPE(env, array_type);
+    return nullptr;
   }
 
   // Double check that width matches TF data type size:
-  if (dtype == TF_INT64) {
+  if (dtype == TF_INT64)
+  {
     // Currently, int64-type Tensors are represented as Int32Arrays. So the
     // logic for comparing the byte size of the typed-array representation and
     // the byte size of the tensor dtype needs to be special-cased for int64.
-    if (width * 2 != TF_DataTypeSize(dtype)) {
+    if (width * 2 != TF_DataTypeSize(dtype))
+    {
       NAPI_THROW_ERROR(
           env,
           "Byte size of elements differs between JavaScript VM "
@@ -110,8 +122,11 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromTypedArray(napi_env env,
           width, width * 2, TF_DataTypeSize(dtype));
       return nullptr;
     }
-  } else {
-    if (width != TF_DataTypeSize(dtype)) {
+  }
+  else
+  {
+    if (width != TF_DataTypeSize(dtype))
+    {
       NAPI_THROW_ERROR(env,
                        "Byte size of elements differs between JavaScript VM "
                        "(%zu) and TensorFlow (%zu)",
@@ -122,17 +137,20 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromTypedArray(napi_env env,
 
   // Determine the size of the buffer based on the dimensions.
   size_t num_elements = 1;
-  for (size_t i = 0; i < shape_length; i++) {
+  for (size_t i = 0; i < shape_length; i++)
+  {
     num_elements *= shape[i];
   }
 
   // Ensure the shape matches the length of the passed in typed-array.
-  if (dtype == TF_INT64) {
+  if (dtype == TF_INT64)
+  {
     // Currently, int64-type Tensors are represented as Int32Arrays.
     // To represent a int64-type Tensor of `n` elements, an Int32Array of
     // length `2 * n` is requried. This is why the length-match checking
     // logic is special-cased for int64.
-    if (array_length != num_elements * 2) {
+    if (array_length != num_elements * 2)
+    {
       NAPI_THROW_ERROR(
           env,
           "Shape does not match two times typed-array in bindData() "
@@ -140,8 +158,11 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromTypedArray(napi_env env,
           num_elements * 2, array_length);
       return nullptr;
     }
-  } else {
-    if (num_elements != array_length) {
+  }
+  else
+  {
+    if (num_elements != array_length)
+    {
       NAPI_THROW_ERROR(env,
                        "Shape does not match typed-array in bindData() "
                        "(num_elements=%zu, array_length=%zu)",
@@ -155,7 +176,8 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromTypedArray(napi_env env,
   // reduced in the callback helper.
   NapiAutoRef *auto_ref = new NapiAutoRef();
   nstatus = auto_ref->Init(env, array_value);
-  if (nstatus != napi_ok) {
+  if (nstatus != napi_ok)
+  {
     delete auto_ref;
   }
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
@@ -172,7 +194,8 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromTypedArray(napi_env env,
   TF_AutoStatus tf_status;
   TFE_TensorHandle *tfe_tensor_handle =
       TFE_NewTensorHandle(tensor.tensor, tf_status.status);
-  if (TF_GetCode(tf_status.status) != TF_OK) {
+  if (TF_GetCode(tf_status.status) != TF_OK)
+  {
     delete auto_ref;
     TFE_DeleteTensorHandle(tfe_tensor_handle);
   }
@@ -184,7 +207,8 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromTypedArray(napi_env env,
 // Creates a TFE_TensorHandle from a JS array of Uint8Array values.
 TFE_TensorHandle *CreateTFE_TensorHandleFromStringArray(
     napi_env env, int64_t *shape, uint32_t shape_length, TF_DataType dtype,
-    napi_value array_value) {
+    napi_value array_value)
+{
   napi_status nstatus;
 
   uint32_t array_length;
@@ -194,7 +218,8 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromStringArray(
   size_t offsets_size = array_length * sizeof(uint64_t);
   size_t data_size = offsets_size;
 
-  for (uint32_t i = 0; i < array_length; ++i) {
+  for (uint32_t i = 0; i < array_length; ++i)
+  {
     napi_value cur_value;
     nstatus = napi_get_element(env, array_value, i, &cur_value);
     ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
@@ -208,7 +233,8 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromStringArray(
     ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
     // Only Uint8 typed arrays are supported.
-    if (array_type != napi_uint8_array) {
+    if (array_type != napi_uint8_array)
+    {
       NAPI_THROW_ERROR(env, "Unsupported array type - expecting Uint8Array");
       return nullptr;
     }
@@ -226,7 +252,8 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromStringArray(
   char *str_data_start = (char *)tensor_data + offsets_size;
   char *cur_str_data = str_data_start;
 
-  for (uint32_t i = 0; i < array_length; ++i) {
+  for (uint32_t i = 0; i < array_length; ++i)
+  {
     napi_value cur_value;
     nstatus = napi_get_element(env, array_value, i, &cur_value);
     ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
@@ -256,14 +283,18 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromJSValues(napi_env env,
                                                      int64_t *shape,
                                                      uint32_t shape_length,
                                                      TF_DataType dtype,
-                                                     napi_value array_value) {
+                                                     napi_value array_value)
+{
   bool is_typed_array;
   napi_status nstatus = napi_is_typedarray(env, array_value, &is_typed_array);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
-  if (is_typed_array) {
+  if (is_typed_array)
+  {
     return CreateTFE_TensorHandleFromTypedArray(env, shape, shape_length, dtype,
                                                 array_value);
-  } else {
+  }
+  else
+  {
     return CreateTFE_TensorHandleFromStringArray(env, shape, shape_length,
                                                  dtype, array_value);
   }
@@ -272,7 +303,8 @@ TFE_TensorHandle *CreateTFE_TensorHandleFromJSValues(napi_env env,
 TFE_TensorHandle *CopyTFE_TensorHandleToDevice(napi_env env,
                                                const char *device_name,
                                                TFE_TensorHandle *handle,
-                                               TFE_Context *tfe_context) {
+                                               TFE_Context *tfe_context)
+{
   TF_AutoStatus tf_status;
 
   TFE_TensorHandle *new_handle = TFE_TensorHandleCopyToDevice(
@@ -287,7 +319,8 @@ void CopyTFE_TensorHandleDataToTypedArray(napi_env env,
                                           TFE_TensorHandle *tfe_tensor_handle,
                                           TF_DataType tensor_data_type,
                                           napi_typedarray_type array_type,
-                                          napi_value *result) {
+                                          napi_value *result)
+{
   TF_AutoStatus tf_status;
 
   TF_AutoTensor tensor(
@@ -297,7 +330,8 @@ void CopyTFE_TensorHandleDataToTypedArray(napi_env env,
   // Determine the length of the array based on the shape of the tensor.
   size_t num_elements = GetTensorNumElements(tensor.tensor);
 
-  if (tensor_data_type == TF_COMPLEX64) {
+  if (tensor_data_type == TF_COMPLEX64)
+  {
     // Dimension length will be double for Complex 64.
     num_elements *= 2;
   }
@@ -323,14 +357,16 @@ void CopyTFE_TensorHandleDataToTypedArray(napi_env env,
 void CopyTFE_TensorHandleDataToStringArray(napi_env env,
                                            TFE_Context *tfe_context,
                                            TFE_TensorHandle *tfe_tensor_handle,
-                                           napi_value *result) {
+                                           napi_value *result)
+{
   TF_AutoStatus tf_status;
 
   TF_AutoTensor tensor(
       TFE_TensorHandleResolve(tfe_tensor_handle, tf_status.status));
   ENSURE_TF_OK(env, tf_status);
 
-  if (TF_TensorType(tensor.tensor) != TF_STRING) {
+  if (TF_TensorType(tensor.tensor) != TF_STRING)
+  {
     NAPI_THROW_ERROR(env, "Tensor is not of type TF_STRING");
     return;
   }
@@ -358,7 +394,8 @@ void CopyTFE_TensorHandleDataToStringArray(napi_env env,
 
   const size_t expected_tensor_size =
       (limit - static_cast<const char *>(tensor_data));
-  if (expected_tensor_size != byte_length) {
+  if (expected_tensor_size != byte_length)
+  {
     NAPI_THROW_ERROR(env,
                      "Invalid/corrupt TF_STRING tensor. Expected size: %zu, "
                      "byte_length: %zu",
@@ -366,7 +403,8 @@ void CopyTFE_TensorHandleDataToStringArray(napi_env env,
     return;
   }
 
-  for (uint64_t i = 0; i < num_elements; i++) {
+  for (uint64_t i = 0; i < num_elements; i++)
+  {
     const char *start = data + offsets[i];
     const char *str_ptr = nullptr;
     size_t str_len = 0;
@@ -397,14 +435,16 @@ void CopyTFE_TensorHandleDataToStringArray(napi_env env,
 
 void CopyTFE_TensorHandleDataToResourceArray(
     napi_env env, TFE_Context *tfe_context, TFE_TensorHandle *tfe_tensor_handle,
-    napi_value *result) {
+    napi_value *result)
+{
   TF_AutoStatus tf_status;
 
   TF_AutoTensor tensor(
       TFE_TensorHandleResolve(tfe_tensor_handle, tf_status.status));
   ENSURE_TF_OK(env, tf_status);
 
-  if (TF_TensorType(tensor.tensor) != TF_RESOURCE) {
+  if (TF_TensorType(tensor.tensor) != TF_RESOURCE)
+  {
     NAPI_THROW_ERROR(env, "Tensor is not of type TF_RESOURCE");
     return;
   }
@@ -413,7 +453,8 @@ void CopyTFE_TensorHandleDataToResourceArray(
   ENSURE_VALUE_IS_NOT_NULL(env, tensor_data);
 
   size_t num_elements = GetTensorNumElements(tensor.tensor);
-  if (num_elements != 1) {
+  if (num_elements != 1)
+  {
     NAPI_THROW_ERROR(env,
                      "For DT_RESOURCE tensors, Node.js binding currently "
                      "supports only exactly 1 element, but encountered "
@@ -448,12 +489,15 @@ void CopyTFE_TensorHandleDataToResourceArray(
 // Handles converting the stored TF_Tensor data into the correct JS value.
 void CopyTFE_TensorHandleDataToJSData(napi_env env, TFE_Context *tfe_context,
                                       TFE_TensorHandle *tfe_tensor_handle,
-                                      napi_value *result) {
-  if (tfe_context == nullptr) {
+                                      napi_value *result)
+{
+  if (tfe_context == nullptr)
+  {
     NAPI_THROW_ERROR(env, "Invalid TFE_Context");
     return;
   }
-  if (tfe_tensor_handle == nullptr) {
+  if (tfe_tensor_handle == nullptr)
+  {
     NAPI_THROW_ERROR(env, "Invalid TFE_TensorHandle");
     return;
   }
@@ -463,38 +507,44 @@ void CopyTFE_TensorHandleDataToJSData(napi_env env, TFE_Context *tfe_context,
   bool is_string = false;
   bool is_resource = false;
   TF_DataType tensor_data_type = TFE_TensorHandleDataType(tfe_tensor_handle);
-  switch (tensor_data_type) {
-    case TF_COMPLEX64:
-    case TF_FLOAT:
-      typed_array_type = napi_float32_array;
-      break;
-    case TF_INT32:
-      typed_array_type = napi_int32_array;
-      break;
-    case TF_BOOL:
-      typed_array_type = napi_uint8_array;
-      break;
-    case TF_STRING:
-      is_string = true;
-      break;
-    case TF_RESOURCE:
-      // We currently represent a resource handle as an `Uint8Array`.
-      typed_array_type = napi_uint8_array;
-      is_resource = true;
-      break;
-    default:
-      REPORT_UNKNOWN_TF_DATA_TYPE(env,
-                                  TFE_TensorHandleDataType(tfe_tensor_handle));
-      return;
+  switch (tensor_data_type)
+  {
+  case TF_COMPLEX64:
+  case TF_FLOAT:
+    typed_array_type = napi_float32_array;
+    break;
+  case TF_INT32:
+    typed_array_type = napi_int32_array;
+    break;
+  case TF_BOOL:
+    typed_array_type = napi_uint8_array;
+    break;
+  case TF_STRING:
+    is_string = true;
+    break;
+  case TF_RESOURCE:
+    // We currently represent a resource handle as an `Uint8Array`.
+    typed_array_type = napi_uint8_array;
+    is_resource = true;
+    break;
+  default:
+    REPORT_UNKNOWN_TF_DATA_TYPE(env,
+                                TFE_TensorHandleDataType(tfe_tensor_handle));
+    return;
   }
 
-  if (is_string) {
+  if (is_string)
+  {
     CopyTFE_TensorHandleDataToStringArray(env, tfe_context, tfe_tensor_handle,
                                           result);
-  } else if (is_resource) {
+  }
+  else if (is_resource)
+  {
     CopyTFE_TensorHandleDataToResourceArray(env, tfe_context, tfe_tensor_handle,
                                             result);
-  } else {
+  }
+  else
+  {
     CopyTFE_TensorHandleDataToTypedArray(env, tfe_context, tfe_tensor_handle,
                                          tensor_data_type, typed_array_type,
                                          result);
@@ -502,21 +552,26 @@ void CopyTFE_TensorHandleDataToJSData(napi_env env, TFE_Context *tfe_context,
 }
 
 void GetTFE_TensorHandleShape(napi_env env, TFE_TensorHandle *handle,
-                              napi_value *result) {
+                              napi_value *result)
+{
   napi_status nstatus;
 
   TF_AutoStatus tf_status;
   uint32_t num_dims = TFE_TensorHandleNumDims(handle, tf_status.status);
   ENSURE_TF_OK(env, tf_status);
 
-  if (num_dims == 0) {
+  if (num_dims == 0)
+  {
     nstatus = napi_create_array_with_length(env, 0, result);
     ENSURE_NAPI_OK(env, nstatus);
-  } else {
+  }
+  else
+  {
     nstatus = napi_create_array_with_length(env, num_dims, result);
     ENSURE_NAPI_OK(env, nstatus);
 
-    for (uint32_t i = 0; i < num_dims; i++) {
+    for (uint32_t i = 0; i < num_dims; i++)
+    {
       napi_value cur_dim;
       nstatus = napi_create_int64(
           env, TFE_TensorHandleDim(handle, i, tf_status.status), &cur_dim);
@@ -529,7 +584,8 @@ void GetTFE_TensorHandleShape(napi_env env, TFE_TensorHandle *handle,
   }
 }
 
-inline bool IsArray(napi_env env, napi_status &nstatus, napi_value *val) {
+inline bool IsArray(napi_env env, napi_status &nstatus, napi_value *val)
+{
   bool is_array;
   nstatus = napi_is_array(env, *val, &is_array);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, false);
@@ -537,7 +593,8 @@ inline bool IsArray(napi_env env, napi_status &nstatus, napi_value *val) {
 }
 
 void GetTFE_TensorHandleType(napi_env env, TFE_TensorHandle *handle,
-                             napi_value *result) {
+                             napi_value *result)
+{
   napi_status nstatus;
 
   TF_DataType dtype = TFE_TensorHandleDataType(handle);
@@ -545,7 +602,8 @@ void GetTFE_TensorHandleType(napi_env env, TFE_TensorHandle *handle,
   ENSURE_NAPI_OK(env, nstatus);
 }
 
-void AssignOpAttr(napi_env env, TFE_Op *tfe_op, napi_value attr_value) {
+void AssignOpAttr(napi_env env, TFE_Op *tfe_op, napi_value attr_value)
+{
   napi_status nstatus;
 
   napi_value attr_name_value;
@@ -575,131 +633,152 @@ void AssignOpAttr(napi_env env, TFE_Op *tfe_op, napi_value attr_value) {
   nstatus = napi_get_named_property(env, attr_value, "value", &js_value);
   ENSURE_NAPI_OK(env, nstatus);
 
-  switch (tf_attr_type) {
-    case TF_ATTR_STRING: {
-      // NOTE: String attribute values do not have to be utf8 encoded strings
-      // (could be arbitrary byte sequences).
-      std::string str_value;
-      nstatus = GetStringParam(env, js_value, str_value);
+  switch (tf_attr_type)
+  {
+  case TF_ATTR_STRING:
+  {
+    // NOTE: String attribute values do not have to be utf8 encoded strings
+    // (could be arbitrary byte sequences).
+    std::string str_value;
+    nstatus = GetStringParam(env, js_value, str_value);
+    ENSURE_NAPI_OK(env, nstatus);
+
+    TFE_OpSetAttrString(tfe_op, attr_name, str_value.c_str(),
+                        str_value.size());
+    break;
+  }
+
+  case TF_ATTR_INT:
+  {
+    if (IsArray(env, nstatus, &js_value))
+    {
+      uint32_t length;
+      nstatus = napi_get_array_length(env, js_value, &length);
+      ENSURE_NAPI_OK(env, nstatus);
+      std::unique_ptr<int64_t[]> data(new int64_t[length]);
+      for (uint32_t i = 0; i < length; ++i)
+      {
+        napi_value element;
+        nstatus = napi_get_element(env, js_value, i, &element);
+        ENSURE_NAPI_OK(env, nstatus);
+        int32_t value;
+        nstatus = napi_get_value_int32(env, element, &value);
+        ENSURE_NAPI_OK(env, nstatus);
+        data[i] = value;
+      }
+      TFE_OpSetAttrIntList(tfe_op, attr_name, data.get(),
+                           static_cast<int>(length));
+    }
+    else
+    {
+      int64_t value;
+      nstatus = napi_get_value_int64(env, js_value, &value);
       ENSURE_NAPI_OK(env, nstatus);
 
-      TFE_OpSetAttrString(tfe_op, attr_name, str_value.c_str(),
-                          str_value.size());
-      break;
+      TFE_OpSetAttrInt(tfe_op, attr_name, value);
     }
+    break;
+  }
 
-    case TF_ATTR_INT: {
-      if (IsArray(env, nstatus, &js_value)) {
-        uint32_t length;
-        nstatus = napi_get_array_length(env, js_value, &length);
+  case TF_ATTR_FLOAT:
+  {
+    if (IsArray(env, nstatus, &js_value))
+    {
+      uint32_t length;
+      nstatus = napi_get_array_length(env, js_value, &length);
+      ENSURE_NAPI_OK(env, nstatus);
+      std::unique_ptr<float[]> data(new float[length]);
+      for (uint32_t i = 0; i < length; ++i)
+      {
+        napi_value element;
+        nstatus = napi_get_element(env, js_value, i, &element);
         ENSURE_NAPI_OK(env, nstatus);
-        std::unique_ptr<int64_t[]> data(new int64_t[length]);
-        for (uint32_t i = 0; i < length; ++i) {
-          napi_value element;
-          nstatus = napi_get_element(env, js_value, i, &element);
-          ENSURE_NAPI_OK(env, nstatus);
-          int32_t value;
-          nstatus = napi_get_value_int32(env, element, &value);
-          ENSURE_NAPI_OK(env, nstatus);
-          data[i] = value;
-        }
-        TFE_OpSetAttrIntList(tfe_op, attr_name, data.get(),
-                             static_cast<int>(length));
-      } else {
-        int64_t value;
-        nstatus = napi_get_value_int64(env, js_value, &value);
-        ENSURE_NAPI_OK(env, nstatus);
-
-        TFE_OpSetAttrInt(tfe_op, attr_name, value);
-      }
-      break;
-    }
-
-    case TF_ATTR_FLOAT: {
-      if (IsArray(env, nstatus, &js_value)) {
-        uint32_t length;
-        nstatus = napi_get_array_length(env, js_value, &length);
-        ENSURE_NAPI_OK(env, nstatus);
-        std::unique_ptr<float[]> data(new float[length]);
-        for (uint32_t i = 0; i < length; ++i) {
-          napi_value element;
-          nstatus = napi_get_element(env, js_value, i, &element);
-          ENSURE_NAPI_OK(env, nstatus);
-          double value;
-          nstatus = napi_get_value_double(env, element, &value);
-          ENSURE_NAPI_OK(env, nstatus);
-          data[i] = static_cast<float>(value);
-        }
-        TFE_OpSetAttrFloatList(tfe_op, attr_name, data.get(),
-                               static_cast<int>(length));
-      } else {
         double value;
-        nstatus = napi_get_value_double(env, js_value, &value);
+        nstatus = napi_get_value_double(env, element, &value);
         ENSURE_NAPI_OK(env, nstatus);
-        TFE_OpSetAttrFloat(tfe_op, attr_name, static_cast<float>(value));
+        data[i] = static_cast<float>(value);
       }
-      break;
+      TFE_OpSetAttrFloatList(tfe_op, attr_name, data.get(),
+                             static_cast<int>(length));
     }
-
-    case TF_ATTR_BOOL: {
-      if (IsArray(env, nstatus, &js_value)) {
-        uint32_t length;
-        nstatus = napi_get_array_length(env, js_value, &length);
-        ENSURE_NAPI_OK(env, nstatus);
-        std::unique_ptr<unsigned char[]> data(new unsigned char[length]);
-        for (uint32_t i = 0; i < length; ++i) {
-          napi_value element;
-          nstatus = napi_get_element(env, js_value, i, &element);
-          ENSURE_NAPI_OK(env, nstatus);
-          bool value;
-          nstatus = napi_get_value_bool(env, element, &value);
-          ENSURE_NAPI_OK(env, nstatus);
-          data[i] = value ? 1 : 0;
-        }
-        TFE_OpSetAttrBoolList(tfe_op, attr_name, data.get(),
-                              static_cast<int>(length));
-      } else {
-        bool value;
-        nstatus = napi_get_value_bool(env, js_value, &value);
-        ENSURE_NAPI_OK(env, nstatus);
-        TFE_OpSetAttrBool(tfe_op, attr_name, value ? 1 : 0);
-      }
-      break;
-    }
-
-    case TF_ATTR_TYPE: {
-      TF_DataType tf_data_type;
-      nstatus = napi_get_value_int32(
-          env, js_value, reinterpret_cast<int32_t *>(&tf_data_type));
+    else
+    {
+      double value;
+      nstatus = napi_get_value_double(env, js_value, &value);
       ENSURE_NAPI_OK(env, nstatus);
-
-      TFE_OpSetAttrType(tfe_op, attr_name, tf_data_type);
-      break;
+      TFE_OpSetAttrFloat(tfe_op, attr_name, static_cast<float>(value));
     }
+    break;
+  }
 
-    case TF_ATTR_SHAPE: {
-      std::vector<int64_t> shape_vector;
-      ExtractArrayShape(env, js_value, &shape_vector);
-
-      TF_AutoStatus tf_status;
-      TFE_OpSetAttrShape(tfe_op, attr_name, shape_vector.data(),
-                         shape_vector.size(), tf_status.status);
-      ENSURE_TF_OK(env, tf_status);
-      break;
+  case TF_ATTR_BOOL:
+  {
+    if (IsArray(env, nstatus, &js_value))
+    {
+      uint32_t length;
+      nstatus = napi_get_array_length(env, js_value, &length);
+      ENSURE_NAPI_OK(env, nstatus);
+      std::unique_ptr<unsigned char[]> data(new unsigned char[length]);
+      for (uint32_t i = 0; i < length; ++i)
+      {
+        napi_value element;
+        nstatus = napi_get_element(env, js_value, i, &element);
+        ENSURE_NAPI_OK(env, nstatus);
+        bool value;
+        nstatus = napi_get_value_bool(env, element, &value);
+        ENSURE_NAPI_OK(env, nstatus);
+        data[i] = value ? 1 : 0;
+      }
+      TFE_OpSetAttrBoolList(tfe_op, attr_name, data.get(),
+                            static_cast<int>(length));
     }
+    else
+    {
+      bool value;
+      nstatus = napi_get_value_bool(env, js_value, &value);
+      ENSURE_NAPI_OK(env, nstatus);
+      TFE_OpSetAttrBool(tfe_op, attr_name, value ? 1 : 0);
+    }
+    break;
+  }
 
-    default:
-      REPORT_UNKNOWN_TF_ATTR_TYPE(env, tf_attr_type);
-      break;
+  case TF_ATTR_TYPE:
+  {
+    TF_DataType tf_data_type;
+    nstatus = napi_get_value_int32(
+        env, js_value, reinterpret_cast<int32_t *>(&tf_data_type));
+    ENSURE_NAPI_OK(env, nstatus);
+
+    TFE_OpSetAttrType(tfe_op, attr_name, tf_data_type);
+    break;
+  }
+
+  case TF_ATTR_SHAPE:
+  {
+    std::vector<int64_t> shape_vector;
+    ExtractArrayShape(env, js_value, &shape_vector);
+
+    TF_AutoStatus tf_status;
+    TFE_OpSetAttrShape(tfe_op, attr_name, shape_vector.data(),
+                       shape_vector.size(), tf_status.status);
+    ENSURE_TF_OK(env, tf_status);
+    break;
+  }
+
+  default:
+    REPORT_UNKNOWN_TF_ATTR_TYPE(env, tf_attr_type);
+    break;
   }
 }
 
 TFJSBackend::TFJSBackend(napi_env env)
-    : next_tensor_id_(0), next_savedmodel_id_(0) {
+    : next_tensor_id_(0), next_savedmodel_id_(0)
+{
   TF_AutoStatus tf_status;
   TFE_ContextOptions *tfe_options = TFE_NewContextOptions();
   tfe_context_ = TFE_NewContext(tfe_options, tf_status.status);
-  if (TF_GetCode(tf_status.status) != TF_OK) {
+  if (TF_GetCode(tf_status.status) != TF_OK)
+  {
     NAPI_THROW_ERROR(env, "Exception creating TFE_Context");
   }
 
@@ -707,7 +786,8 @@ TFJSBackend::TFJSBackend(napi_env env)
 
   TF_DeviceList *device_list =
       TFE_ContextListDevices(tfe_context_, tf_status.status);
-  if (TF_GetCode(tf_status.status) != TF_OK) {
+  if (TF_GetCode(tf_status.status) != TF_OK)
+  {
     NAPI_THROW_ERROR(env, "Exception creating TFE_Context");
   }
 
@@ -715,17 +795,21 @@ TFJSBackend::TFJSBackend(napi_env env)
   // API. https://github.com/tensorflow/tfjs/issues/320
   std::string cpu_device_name;
   const int num_devices = TF_DeviceListCount(device_list);
-  for (int i = 0; i < num_devices; i++) {
+  for (int i = 0; i < num_devices; i++)
+  {
     const char *device_type =
         TF_DeviceListType(device_list, i, tf_status.status);
     ENSURE_TF_OK(env, tf_status);
 
     // Keep a reference to the host CPU device:
-    if (strcmp(device_type, "CPU") == 0) {
+    if (strcmp(device_type, "CPU") == 0)
+    {
       cpu_device_name =
           std::string(TF_DeviceListName(device_list, i, tf_status.status));
       ENSURE_TF_OK(env, tf_status);
-    } else if (strcmp(device_type, "GPU") == 0) {
+    }
+    else if (strcmp(device_type, "GPU") == 0)
+    {
       device_name =
           std::string(TF_DeviceListName(device_list, i, tf_status.status));
       ENSURE_TF_OK(env, tf_status);
@@ -733,38 +817,47 @@ TFJSBackend::TFJSBackend(napi_env env)
   }
 
   // If no GPU devices found, fallback to host CPU:
-  if (device_name.empty()) {
+  if (device_name.empty())
+  {
     device_name = cpu_device_name;
     is_gpu_device = false;
-  } else {
+  }
+  else
+  {
     is_gpu_device = true;
   }
   TF_DeleteDeviceList(device_list);
 }
 
-TFJSBackend::~TFJSBackend() {
-  for (auto &kv : tfe_handle_map_) {
+TFJSBackend::~TFJSBackend()
+{
+  for (auto &kv : tfe_handle_map_)
+  {
     TFE_DeleteTensorHandle(kv.second);
   }
-  for (auto &kv : tf_savedmodel_map_) {
+  for (auto &kv : tf_savedmodel_map_)
+  {
     TF_AutoStatus tf_status;
     TF_DeleteSession(kv.second.first, tf_status.status);
     TF_DeleteGraph(kv.second.second);
   }
-  if (tfe_context_ != nullptr) {
+  if (tfe_context_ != nullptr)
+  {
     TFE_DeleteContext(tfe_context_);
   }
 }
 
 TFJSBackend *TFJSBackend::Create(napi_env env) { return new TFJSBackend(env); }
 
-int32_t TFJSBackend::InsertHandle(TFE_TensorHandle *tfe_handle) {
+int32_t TFJSBackend::InsertHandle(TFE_TensorHandle *tfe_handle)
+{
   return tfe_handle_map_.insert(std::make_pair(next_tensor_id_++, tfe_handle))
       .first->first;
 }
 
 int32_t TFJSBackend::InsertSavedModel(TF_Session *tf_session,
-                                      TF_Graph *tf_graph) {
+                                      TF_Graph *tf_graph)
+{
   // Both TF_Session and TF_Graph are required when executing SavedModel.
   // TF_Graph is used to find input/output operation from string name.
   return tf_savedmodel_map_
@@ -775,13 +868,15 @@ int32_t TFJSBackend::InsertSavedModel(TF_Session *tf_session,
 
 napi_value TFJSBackend::CreateTensor(napi_env env, napi_value shape_value,
                                      napi_value dtype_value,
-                                     napi_value array_value) {
+                                     napi_value array_value)
+{
   napi_status nstatus;
 
   std::vector<int64_t> shape_vector;
   ExtractArrayShape(env, shape_value, &shape_vector);
   // Check to see if an exception exists, if so return a failure.
-  if (IsExceptionPending(env)) {
+  if (IsExceptionPending(env))
+  {
     return nullptr;
   }
 
@@ -794,13 +889,15 @@ napi_value TFJSBackend::CreateTensor(napi_env env, napi_value shape_value,
       static_cast<TF_DataType>(dtype_int32), array_value);
 
   // Check to see if an exception exists, if so return a failure.
-  if (IsExceptionPending(env)) {
+  if (IsExceptionPending(env))
+  {
     return nullptr;
   }
 
   // Copy non-int32 and non-string tensors to a device. Most GPU kernels expect
   // to have int32 tensors in host memory.
-  if (dtype_int32 != TF_INT32 && dtype_int32 != TF_STRING) {
+  if (dtype_int32 != TF_INT32 && dtype_int32 != TF_STRING)
+  {
     // Note that this is a shallow copy and will share the underlying buffer
     // if copying to the same device.
     TFE_TensorHandle *new_handle = CopyTFE_TensorHandleToDevice(
@@ -816,12 +913,14 @@ napi_value TFJSBackend::CreateTensor(napi_env env, napi_value shape_value,
   return output_tensor_id;
 }
 
-void TFJSBackend::DeleteTensor(napi_env env, napi_value tensor_id_value) {
+void TFJSBackend::DeleteTensor(napi_env env, napi_value tensor_id_value)
+{
   int32_t tensor_id;
   ENSURE_NAPI_OK(env, napi_get_value_int32(env, tensor_id_value, &tensor_id));
 
   auto tensor_entry = tfe_handle_map_.find(tensor_id);
-  if (tensor_entry == tfe_handle_map_.end()) {
+  if (tensor_entry == tfe_handle_map_.end())
+  {
     NAPI_THROW_ERROR(env,
                      "Delete called on a Tensor not referenced (tensor_id: %d)",
                      tensor_id);
@@ -833,13 +932,15 @@ void TFJSBackend::DeleteTensor(napi_env env, napi_value tensor_id_value) {
 }
 
 napi_value TFJSBackend::GetTensorData(napi_env env,
-                                      napi_value tensor_id_value) {
+                                      napi_value tensor_id_value)
+{
   int32_t tensor_id;
   ENSURE_NAPI_OK_RETVAL(
       env, napi_get_value_int32(env, tensor_id_value, &tensor_id), nullptr);
 
   auto tensor_entry = tfe_handle_map_.find(tensor_id);
-  if (tensor_entry == tfe_handle_map_.end()) {
+  if (tensor_entry == tfe_handle_map_.end())
+  {
     NAPI_THROW_ERROR(
         env, "Get data called on a Tensor not referenced (tensor_id: %d)",
         tensor_id);
@@ -855,7 +956,8 @@ napi_value TFJSBackend::GetTensorData(napi_env env,
 napi_value TFJSBackend::ExecuteOp(napi_env env, napi_value op_name_value,
                                   napi_value op_attr_inputs,
                                   napi_value input_tensor_ids,
-                                  napi_value num_output_values) {
+                                  napi_value num_output_values)
+{
   napi_status nstatus;
 
   std::string op_name;
@@ -870,7 +972,8 @@ napi_value TFJSBackend::ExecuteOp(napi_env env, napi_value op_name_value,
   nstatus = napi_get_array_length(env, input_tensor_ids, &num_input_ids);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
-  for (uint32_t i = 0; i < num_input_ids; i++) {
+  for (uint32_t i = 0; i < num_input_ids; i++)
+  {
     napi_value cur_input_id;
     nstatus = napi_get_element(env, input_tensor_ids, i, &cur_input_id);
     ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
@@ -880,7 +983,8 @@ napi_value TFJSBackend::ExecuteOp(napi_env env, napi_value op_name_value,
     ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
     auto input_tensor_entry = tfe_handle_map_.find(cur_input_tensor_id);
-    if (input_tensor_entry == tfe_handle_map_.end()) {
+    if (input_tensor_entry == tfe_handle_map_.end())
+    {
       NAPI_THROW_ERROR(env, "Input Tensor ID not referenced (tensor_id: %d)",
                        cur_input_tensor_id);
       return nullptr;
@@ -894,7 +998,8 @@ napi_value TFJSBackend::ExecuteOp(napi_env env, napi_value op_name_value,
   nstatus = napi_get_array_length(env, op_attr_inputs, &op_attrs_length);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
-  for (uint32_t i = 0; i < op_attrs_length; i++) {
+  for (uint32_t i = 0; i < op_attrs_length; i++)
+  {
     napi_value cur_op_attr;
     nstatus = napi_get_element(env, op_attr_inputs, i, &cur_op_attr);
     ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
@@ -902,7 +1007,8 @@ napi_value TFJSBackend::ExecuteOp(napi_env env, napi_value op_name_value,
     AssignOpAttr(env, tfe_op.op, cur_op_attr);
 
     // Check to see if an exception exists, if so return a failure.
-    if (IsExceptionPending(env)) {
+    if (IsExceptionPending(env))
+    {
       return nullptr;
     }
   }
@@ -923,7 +1029,8 @@ napi_value TFJSBackend::ExecuteOp(napi_env env, napi_value op_name_value,
   nstatus = napi_create_array_with_length(env, size, &output_tensor_infos);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
-  for (int32_t i = 0; i < num_outputs; i++) {
+  for (int32_t i = 0; i < num_outputs; i++)
+  {
     TFE_TensorHandle *handle = result_handles[i];
     napi_value tensor_info_value = GenerateOutputTensorInfo(env, handle);
     // Push into output array
@@ -939,7 +1046,8 @@ napi_value TFJSBackend::ExecuteOp(napi_env env, napi_value op_name_value,
  * RunSavedModel().
  */
 napi_value TFJSBackend::GenerateOutputTensorInfo(napi_env env,
-                                                 TFE_TensorHandle *handle) {
+                                                 TFE_TensorHandle *handle)
+{
   napi_status nstatus;
 
   // Output tensor info object:
@@ -978,7 +1086,8 @@ napi_value TFJSBackend::GenerateOutputTensorInfo(napi_env env,
 
 napi_value TFJSBackend::LoadSavedModel(napi_env env,
                                        napi_value export_dir_value,
-                                       napi_value tags_value) {
+                                       napi_value tags_value)
+{
   TF_SessionOptions *session_options = TF_NewSessionOptions();
 
   TF_Buffer *run_options = TF_NewBufferFromString("", 0);
@@ -1010,27 +1119,47 @@ napi_value TFJSBackend::LoadSavedModel(napi_env env,
   TF_DeleteBuffer(run_options);
   TF_DeleteBuffer(metagraph);
 
-  if (TF_GetCode(tf_status.status) != TF_OK) {
+  if (TF_GetCode(tf_status.status) != TF_OK)
+  {
     NAPI_THROW_ERROR(env, "Failed to load SavedModel: %s",
                      TF_Message(tf_status.status));
     return nullptr;
   }
 
+  // TF_Session sessions[4];
   napi_value output_session_id;
   nstatus = napi_create_int32(env, InsertSavedModel(session, graph),
                               &output_session_id);
+  printf("TF MAP SIZE: %i\n", tf_savedmodel_map_.size());
+
+  // for (size_t i = 0; i < 4; i++)
+  // {
+  //   TF_AutoStatus tf_new_status;
+  //   TF_SessionOptions *new_session_options = TF_NewSessionOptions();
+
+  //   printf("going to create new session\n");
+  //   TF_Session *new_session = TF_NewSession(graph, new_session_options, tf_new_status.status);
+  //   printf("new session\n");
+  //   InsertSavedModel(new_session, graph);
+  //   printf("output session id: %i\n", next_savedmodel_id_);
+  //   printf("TF MAP SIZE: %i\n", tf_savedmodel_map_.size());
+  //   TF_DeleteSessionOptions(new_session_options);
+  // }
+
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
   return output_session_id;
 }
 
 void TFJSBackend::DeleteSavedModel(napi_env env,
-                                   napi_value savedmodel_id_value) {
+                                   napi_value savedmodel_id_value)
+{
   int32_t savedmodel_id;
   ENSURE_NAPI_OK(
       env, napi_get_value_int32(env, savedmodel_id_value, &savedmodel_id));
 
   auto savedmodel_entry = tf_savedmodel_map_.find(savedmodel_id);
-  if (savedmodel_entry == tf_savedmodel_map_.end()) {
+  if (savedmodel_entry == tf_savedmodel_map_.end())
+  {
     NAPI_THROW_ERROR(
         env, "Delete called on a SavedModel not found (savedmodel_id: %d)",
         savedmodel_id);
@@ -1039,7 +1168,8 @@ void TFJSBackend::DeleteSavedModel(napi_env env,
 
   TF_AutoStatus tf_status;
   TF_DeleteSession(savedmodel_entry->second.first, tf_status.status);
-  if (TF_GetCode(tf_status.status) != TF_OK) {
+  if (TF_GetCode(tf_status.status) != TF_OK)
+  {
     NAPI_THROW_ERROR(env, "Failed to delete SavedModel: %s",
                      TF_Message(tf_status.status));
     return;
@@ -1054,21 +1184,124 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
                                       napi_value savedmodel_id_value,
                                       napi_value input_tensor_ids,
                                       napi_value input_op_names_value,
-                                      napi_value output_op_names_value) {
+                                      napi_value output_op_names_value,
+                                      napi_ref js_cb)
+{
+  // std::thread threadss[2];
+  // size_t nb_threads = 2;
+  // // threadss[1] = std::thread()
+  // // uv_thread_t threads[2];
+  // for (size_t i = 0; i < nb_threads; i++)
+  // {
+  //   // napi_value model_id;
+  //   // napi_create_int32(env, i, &model_id);
+  //   printf("i: %i \n", i);
+  //   // uv_thread_t thread;
+  //   printf("Going to add to thread array\n");
+  //   threadss[i] = RunSavedModelInternal(env, savedmodel_id_value, input_tensor_ids, input_op_names_value, output_op_names_value);
+  //   printf("Added to thread array\n");
+  //   // uv_thread_join(&thread);
+  //   // std::thread t(&TFJSBackend::RunSavedModelInternal, this, env, savedmodel_id_value, input_tensor_ids, input_op_names_value, output_op_names_value);
+  //   // std::thread t(TTest, env);
+  //   // t.join();
+  // }
+
+  // for (size_t i = 0; i < nb_threads; i++)
+  // {
+  //   printf("Test before\n");
+  //   // // uv_thread_join(&threads[0]);
+  //   std::thread *t = &threadss[i];
+  //   // printf("Thread acquired\n");
+  //   t->join();
+  //   printf("Test after\n");
+  // }
+
+  RunSavedModelInternal(env, savedmodel_id_value, input_tensor_ids, input_op_names_value, output_op_names_value, js_cb);
+
+  // napi_status status;
+
+  // // size_t argc = 1;
+  // // napi_value args[1];
+  // // status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+  // // assert(status == napi_ok);
+
+  // // napi_value cb = args[0];
+
+  // napi_value argv[1];
+  // status = napi_create_string_utf8(env, "hello world", NAPI_AUTO_LENGTH, argv);
+  // assert(status == napi_ok);
+
+  // napi_value global;
+  // status = napi_get_global(env, &global);
+  // assert(status == napi_ok);
+
+  // napi_value result;
+  // status = napi_call_function(env, global, js_cb, 1, argv, &result);
+  // // assert(status == napi_ok);
+
+  // napi_value error = nullptr;
+  // const napi_extended_error_info *info;
+
+  // // We must retrieve the last error info before doing anything else, because
+  // // doing anything else will replace the last error info.
+  // status = napi_get_last_error_info(env, &info);
+  // const char *error_message = info->error_message != nullptr ? info->error_message : "Error in native callback";
+
+  // printf(error_message);
+
+  // napi_value message;
+  // status = napi_create_string_utf8(
+  //   env,
+  //   error_message,
+  //   std::strlen(error_message),
+  //   &message);
+
+  // switch (info->error_code) {
+  //   case napi_object_expected:
+  //   case napi_string_expected:
+  //   case napi_boolean_expected:
+  //   case napi_number_expected:
+  //     status = napi_create_type_error(env, nullptr, message, &error);
+  //     break;
+  //   default:
+  //     status = napi_create_error(env, nullptr,  message, &error);
+  //     break;
+  // }
+
+  return nullptr;
+
+  // return model_id;
+}
+
+napi_value TFJSBackend::RunSavedModelInternal(napi_env env,
+                                              // uv_thread_t *thread,
+                                              napi_value savedmodel_id_value,
+                                              napi_value input_tensor_ids,
+                                              napi_value input_op_names_value,
+                                              napi_value output_op_names_value,
+                                              napi_ref js_cb)
+{
   napi_status nstatus;
   TF_AutoStatus tf_status;
+  napi_value output_tensor_infos;
+
+  // std::thread null_thread = std::thread();
 
   int32_t savedmodel_id;
   nstatus = napi_get_value_int32(env, savedmodel_id_value, &savedmodel_id);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
+  printf("Running SavedModel %i\n", savedmodel_id);
 
   // Get corresponding SavedModel session and graph.
   auto savedmodel_entry = tf_savedmodel_map_.find(savedmodel_id);
-  if (savedmodel_entry == tf_savedmodel_map_.end()) {
+  if (savedmodel_entry == tf_savedmodel_map_.end())
+  {
     NAPI_THROW_ERROR(env, "SavedModel ID not found (savedmodel_id: %d)",
                      savedmodel_id);
     return nullptr;
   }
+
+  printf("Saved model retrieved\n");
 
   std::string input_op_names;
   nstatus = GetStringParam(env, input_op_names_value, input_op_names);
@@ -1076,6 +1309,8 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
   std::string output_op_names;
   nstatus = GetStringParam(env, output_op_names_value, output_op_names);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
+
+  // printf("Inputs/outputs names retrieved\n");
 
   // Get input/output op names as vector
   std::vector<const char *> input_op_name_array =
@@ -1090,7 +1325,8 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
   nstatus = napi_get_array_length(env, input_tensor_ids, &num_input_ids);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
-  if (input_op_name_array.size() != num_input_ids) {
+  if (input_op_name_array.size() != num_input_ids)
+  {
     NAPI_THROW_ERROR(env,
                      "Length of input op names (%d) does not match the length "
                      "of input tensors (%d).",
@@ -1099,27 +1335,36 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
   }
 
   std::vector<TF_Tensor *> input_values;
-
-  for (uint32_t i = 0; i < num_input_ids; i++) {
+  // printf("Going to iterate on inputs ids...\n");
+  for (uint32_t i = 0; i < num_input_ids; i++)
+  {
+    // printf("Inside input ids iteration...\n");
     napi_value cur_input_id;
+    // printf("Trying to get element...\n");
     nstatus = napi_get_element(env, input_tensor_ids, i, &cur_input_id);
+    // printf("After getting element...\n");
     ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
+    // printf("cur_input_id retrieved...\n");
     int32_t cur_input_tensor_id;
     nstatus = napi_get_value_int32(env, cur_input_id, &cur_input_tensor_id);
     ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
+    // printf("Trying to retrieve tensor entry...\n");
     // Find input tensor based on tensor id.
     auto tensor_entry = tfe_handle_map_.find(cur_input_tensor_id);
-    if (tensor_entry == tfe_handle_map_.end()) {
+    if (tensor_entry == tfe_handle_map_.end())
+    {
       NAPI_THROW_ERROR(env, "Input Tensor ID not found (tensor_id: %d)",
                        cur_input_tensor_id);
       return nullptr;
     }
+    // printf("Tensor retrieved...\n");
     TF_Tensor *inputTensor =
         TFE_TensorHandleResolve(tensor_entry->second, tf_status.status);
 
-    if (TF_GetCode(tf_status.status) != TF_OK) {
+    if (TF_GetCode(tf_status.status) != TF_OK)
+    {
       NAPI_THROW_ERROR(
           env, "Failed to get input tensor (tensor_id: %d) for session.",
           cur_input_tensor_id);
@@ -1136,9 +1381,12 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
     std::string input_op_name = name.substr(0, index);
     const char *input_op_index = name.substr(index + 1).c_str();
     int input_tensor_index;
-    if (strlen(input_op_index) == 0) {
+    if (strlen(input_op_index) == 0)
+    {
       input_tensor_index = 0;
-    } else {
+    }
+    else
+    {
       input_tensor_index = atoi(input_op_index);
     }
 
@@ -1147,7 +1395,8 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
     // to be generated  every time.
     TF_Operation *input_op = TF_GraphOperationByName(
         savedmodel_entry->second.second, input_op_name.c_str());
-    if (input_op == nullptr) {
+    if (input_op == nullptr)
+    {
       NAPI_THROW_ERROR(env, "Input op name can not be found in the graph.");
       return nullptr;
     }
@@ -1155,8 +1404,10 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
     inputs.push_back(in);
   }
 
+  // printf("Going to iterate on output names...\n");
   // Add output op into output ops list.
-  for (uint32_t i = 0; i < output_op_name_array.size(); i++) {
+  for (uint32_t i = 0; i < output_op_name_array.size(); i++)
+  {
     // The item in output_op_name_array is something like
     // "StatefulPartitionedCall:0". Parse it into output op name and index.
     std::string name(output_op_name_array[i]);
@@ -1164,15 +1415,19 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
     std::string output_op_name = name.substr(0, index);
     const char *output_op_index = name.substr(index + 1).c_str();
     int output_tensor_index;
-    if (strlen(output_op_index) == 0) {
+    if (strlen(output_op_index) == 0)
+    {
       output_tensor_index = 0;
-    } else {
+    }
+    else
+    {
       output_tensor_index = atoi(output_op_index);
     }
 
     TF_Operation *output_op = TF_GraphOperationByName(
         savedmodel_entry->second.second, output_op_name.c_str());
-    if (output_op == nullptr) {
+    if (output_op == nullptr)
+    {
       NAPI_THROW_ERROR(env, "Output op name can not be found in the graph.");
       return nullptr;
     }
@@ -1182,43 +1437,81 @@ napi_value TFJSBackend::RunSavedModel(napi_env env,
 
   std::vector<TF_Tensor *> output_values(outputs.size(), nullptr);
 
-  TF_SessionRun(savedmodel_entry->second.first, nullptr, inputs.data(),
-                input_values.data(), num_input_ids, outputs.data(),
-                output_values.data(), output_op_name_array.size(), nullptr, 0,
-                nullptr, tf_status.status);
+  printf("Going to run session...\n");
 
-  if (TF_GetCode(tf_status.status) != TF_OK) {
-    NAPI_THROW_ERROR(env, "Session fail to run with error: %s",
-                     TF_Message(tf_status.status));
-    return nullptr;
-  }
+  ThreadData *thread_data = new ThreadData(*this);
+  // thread_data->env = env;
+  thread_data->input_values = input_values;
+  thread_data->session = savedmodel_entry->second.first;
+  thread_data->inputs = inputs;
+  thread_data->num_input_ids = num_input_ids;
+  thread_data->outputs = outputs;
+  thread_data->output_values = output_values;
+  thread_data->output_op_name_array = output_op_name_array;
+  thread_data->js_cb = js_cb;
+  // thread_data->backend = this;
 
-  napi_value output_tensor_infos;
-  nstatus = napi_create_array_with_length(env, 1, &output_tensor_infos);
-  ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
+  // uv_thread_create(thread, RunSession, thread_data);
+  // std::thread t = std::thread(RunSession, thread_data);
 
-  // Generate output tensors for JS.
-  for (uint32_t i = 0; i < output_op_name_array.size(); i++) {
-    TFE_TensorHandle *tfe_handle =
-        TFE_NewTensorHandle(output_values[i], tf_status.status);
-    // Deallocate output TF_Tensor in C++.
-    TF_DeleteTensor(output_values[i]);
+  napi_value work_name;
+  napi_create_string_utf8(env,
+                          "Running session",
+                          NAPI_AUTO_LENGTH,
+                          &work_name);
 
-    napi_value tensor_info_value = GenerateOutputTensorInfo(env, tfe_handle);
-    // Push into output array
-    nstatus = napi_set_element(env, output_tensor_infos, i, tensor_info_value);
-    ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
-  }
+  napi_create_async_work(env, NULL, work_name, RunSession, ParseSessionResult, thread_data, &thread_data->work);
+  // printf("work created\n");
+  napi_queue_async_work(env, thread_data->work);
+  // printf("work queued\n");
 
-  for (uint32_t i = 0; i < num_input_ids; i++) {
-    // Deallocate input TF_Tensor in C++.
-    TF_DeleteTensor(input_values[i]);
-  }
+  return nullptr;
 
-  return output_tensor_infos;
+  // t.join();
+  // TF_SessionRun(savedmodel_entry->second.first, nullptr, inputs.data(),
+  //               input_values.data(), num_input_ids, outputs.data(),
+  //               output_values.data(), output_op_name_array.size(), nullptr, 0,
+  //               nullptr, tf_status.status);
+
+  // if (TF_GetCode(tf_status.status) != TF_OK)
+  // {
+  //   NAPI_THROW_ERROR(env, "Session fail to run with error: %s",
+  //                    TF_Message(tf_status.status));
+  //   return null_thread;
+  // }
+
+  // return t;
+
+  // napi_value output_tensor_infos;
+  // nstatus = napi_create_array_with_length(env, 1, &output_tensor_infos);
+  // ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
+
+  // // Generate output tensors for JS.
+  // for (uint32_t i = 0; i < output_op_name_array.size(); i++)
+  // {
+  //   TFE_TensorHandle *tfe_handle =
+  //       TFE_NewTensorHandle(output_values[i], tf_status.status);
+  //   // Deallocate output TF_Tensor in C++.
+  //   TF_DeleteTensor(output_values[i]);
+
+  //   napi_value tensor_info_value = GenerateOutputTensorInfo(env, tfe_handle);
+  //   // Push into output array
+  //   nstatus = napi_set_element(env, output_tensor_infos, i, tensor_info_value);
+  //   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
+  // }
+
+  // for (uint32_t i = 0; i < num_input_ids; i++)
+  // {
+  //   // Deallocate input TF_Tensor in C++.
+  //   TF_DeleteTensor(input_values[i]);
+  // }
+
+  // printf("End of running model");
+  // return output_tensor_infos;
 }
 
-napi_value TFJSBackend::GetNumOfSavedModels(napi_env env) {
+napi_value TFJSBackend::GetNumOfSavedModels(napi_env env)
+{
   napi_status nstatus;
   napi_value num_saved_models;
   nstatus =
@@ -1227,4 +1520,118 @@ napi_value TFJSBackend::GetNumOfSavedModels(napi_env env) {
   return num_saved_models;
 }
 
-}  // namespace tfnodejs
+void RunSession(napi_env env, void *data)
+{
+  ThreadData *thread_data = (ThreadData *)data;
+  TF_AutoStatus tf_status;
+  // napi_status nstatus;
+
+  // printf("INTO TFJS SESSION\n");
+  TF_SessionRun(thread_data->session, nullptr, thread_data->inputs.data(),
+                thread_data->input_values.data(), thread_data->num_input_ids, thread_data->outputs.data(),
+                thread_data->output_values.data(), thread_data->output_op_name_array.size(), nullptr, 0,
+                nullptr, thread_data->tf_status.status);
+  // printf("SESSION RAN\n");
+
+  // printf("End of running model\n");
+}
+
+void ParseSessionResult(napi_env env, napi_status status, void *data)
+{
+  if (status != napi_ok)
+  {
+    printf("ERROR IN NAPI STATUS\n");
+    return;
+  }
+
+  napi_status nstatus;
+  ThreadData *thread_data = (ThreadData *)data;
+
+  if (TF_GetCode(thread_data->tf_status.status) != TF_OK)
+  {
+    // NAPI_THROW_ERROR(env, "Session fail to run with error: %s",
+    //                  TF_Message(tf_status.status));
+    // return null_thread;
+    printf("ERROR IN TF STATUS\n");
+    return;
+  }
+
+  napi_value output_tensor_infos;
+  nstatus = napi_create_array_with_length(env, 1, &output_tensor_infos);
+  // ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
+
+  // Generate output tensors for JS.
+  for (uint32_t i = 0; i < thread_data->output_op_name_array.size(); i++)
+  {
+    TFE_TensorHandle *tfe_handle =
+        TFE_NewTensorHandle(thread_data->output_values[i], thread_data->tf_status.status);
+    // Deallocate output TF_Tensor in C++.
+    TF_DeleteTensor(thread_data->output_values[i]);
+
+    napi_value tensor_info_value = thread_data->backend.GenerateOutputTensorInfo(env, tfe_handle);
+    // Push into output array
+    nstatus = napi_set_element(env, output_tensor_infos, i, tensor_info_value);
+    // ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
+  }
+
+  for (uint32_t i = 0; i < thread_data->num_input_ids; i++)
+  {
+    // Deallocate input TF_Tensor in C++.
+    TF_DeleteTensor(thread_data->input_values[i]);
+  }
+
+  // printf("End parse result\n");
+
+  napi_value undefined;
+  napi_get_undefined(env, &undefined);
+
+  // napi_value argv[1];
+  // status = napi_create_string_utf8(env, "hello world", NAPI_AUTO_LENGTH, argv);
+  // assert(status == napi_ok);
+
+  napi_value global;
+  status = napi_get_global(env, &global);
+  assert(status == napi_ok);
+
+  // napi_valuetype type_result;
+  // napi_typeof(env, thread_data->js_cb, &type_result);
+  // assert(type_result == napi_function);
+
+  // napi_value result;
+  // status = napi_call_function(env, global, thread_data->js_cb, 1, argv, &result);
+  // assert(status == napi_ok);
+
+  napi_value argv[1] = {output_tensor_infos};
+  // napi_value js_result_array;
+  // assert(napi_create_array_with_length(env, 1, &js_result_array) == napi_ok);
+  // assert(napi_set_element(env, js_result_array, 0, output_tensor_infos) == napi_ok);
+
+  napi_value callback;
+  napi_get_reference_value(env, thread_data->js_cb, &callback);
+
+  napi_value return_val;
+  napi_status callback_status = napi_call_function(env, global, callback, 1, argv, &return_val);
+  // assert(callback_status == napi_ok);
+
+  if (callback_status != napi_ok)
+  {
+    napi_value error = nullptr;
+    const napi_extended_error_info *info;
+
+    // We must retrieve the last error info before doing anything else, because
+    // doing anything else will replace the last error info.
+    status = napi_get_last_error_info(env, &info);
+    const char *error_message = info->error_message != nullptr ? info->error_message : "Error in native callback";
+    printf("ERROR: %s\n", error_message);
+  }
+  // else
+  // {
+  //   printf("callback called\n");
+  // }
+
+  napi_delete_reference(env, thread_data->js_cb);
+  napi_delete_async_work(env, thread_data->work);
+  free(thread_data);
+}
+
+} // namespace tfnodejs

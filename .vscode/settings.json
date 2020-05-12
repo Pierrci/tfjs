@@ -140,5 +140,6 @@
     "*.inc": "cpp",
     "hash_map": "cpp",
     "__refstring": "cpp"
-  }
+  },
+  "python.pythonPath": "/usr/local/Caskroom/miniconda/base/envs/tf-nightly/bin/python"
 }

@@ -15,7 +15,7 @@
  * =============================================================================
  */
 
-import {backend_util} from '@tensorflow/tfjs';
+import { backend_util } from '@tensorflow/tfjs';
 
 export declare class TensorMetadata {
   id: number;
@@ -26,7 +26,7 @@ export declare class TensorMetadata {
 export declare class TFEOpAttr {
   name: string;
   type: number;
-  value: boolean|number|object|string|number[];
+  value: boolean | number | object | string | number[];
 }
 
 export interface TFJSBinding {
@@ -35,19 +35,19 @@ export interface TFJSBinding {
 
   // Creates a tensor with the backend.
   createTensor(
-      shape: number[], dtype: number,
-      buffer: backend_util.BackendValues): number;
+    shape: number[], dtype: number,
+    buffer: backend_util.BackendValues): number;
 
   // Deletes a tensor with the backend.
   deleteTensor(tensorId: number): void;
 
   // Reads data-sync from a tensor on the backend.
-  tensorDataSync(tensorId: number): Float32Array|Int32Array|Uint8Array;
+  tensorDataSync(tensorId: number): Float32Array | Int32Array | Uint8Array;
 
   // Executes an Op on the backend, returns an array of output TensorMetadata.
   executeOp(
-      opName: string, opAttrs: TFEOpAttr[], inputTensorIds: number[],
-      numOutputs: number): TensorMetadata[];
+    opName: string, opAttrs: TFEOpAttr[], inputTensorIds: number[],
+    numOutputs: number): TensorMetadata[];
 
   // Load a SavedModel from a path.
   loadSavedModel(exportDir: string, tags: string): number;
@@ -57,8 +57,8 @@ export interface TFJSBinding {
 
   // Execute a SavedModel with input, returns an array of output TensorMetadata.
   runSavedModel(
-      savedModelId: number, inputTensorIds: number[], inputOpNames: string,
-      outputOpNames: string): TensorMetadata[];
+    savedModelId: number, inputTensorIds: number[], inputOpNames: string,
+    outputOpNames: string, cb: (r: TensorMetadata[]) => void): void;
 
   getNumOfSavedModels(): number;
 
