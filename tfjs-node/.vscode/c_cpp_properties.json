@@ -7,7 +7,7 @@
         "${workspaceFolder}/deps/include",
         "${workspaceFolder}/deps/include/tensorflow/c",
         "${workspaceFolder}/deps/include/tensorflow/c/eager",
-        "/Users/pierric/Library/Caches/node-gyp/10.15.3/include/node"
+        "/Users/pierric/Library/Caches/node-gyp/12.16.3/include/node"
       ],
       "defines": [],
       "intelliSenseMode": "clang-x64",
@@ -17,7 +17,7 @@
           "${workspaceFolder}/deps/include",
           "${workspaceFolder}/deps/include/tensorflow/c",
           "${workspaceFolder}/deps/include/tensorflow/c/eager",
-          "/Users/pierric/Library/Caches/node-gyp/10.15.3/include/node"
+          "/Users/pierric/Library/Caches/node-gyp/12.16.3/include/node"
         ],
         "limitSymbolsToIncludedHeaders": true,
         "databaseFilename": ""
@@ -36,7 +36,7 @@
         "/usr/include",
         "/usr/local/include",
         "${workspaceFolder}",
-        "${env.HOME}/.node-gyp/10.15.0/include/node",
+        "${env.HOME}/.node-gyp/12.16.3/include/node",
         "${workspaceFolder}/deps/include"
       ],
       "defines": [],
@@ -48,7 +48,7 @@
           "${workspaceFolder}",
           "${workspaceFolder}/deps/include/tensorflow/c",
           "${workspaceFolder}/deps/include/tensorflow/c/eager",
-          "${env.HOME}/.node-gyp/10.15.0/include/node"
+          "${env.HOME}/.node-gyp/12.16.3/include/node"
         ],
         "limitSymbolsToIncludedHeaders": true,
         "databaseFilename": ""
@@ -63,7 +63,7 @@
         "C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/include",
         "${workspaceFolder}",
         "${workspaceFolder}/deps/include",
-        "${env.HOMEPATH}/.node-gyp/10.15.2/include/node"
+        "${env.HOMEPATH}/.node-gyp/12.16.3/include/node"
       ],
       "defines": [
         "_DEBUG",
@@ -77,7 +77,7 @@
           "${workspaceFolder}",
           "${workspaceFolder}/deps/include/tensorflow/c",
           "${workspaceFolder}/deps/include/tensorflow/c/eager",
-          "${env.HOMEPATH}/.node-gyp/10.15.2/include/node"
+          "${env.HOMEPATH}/.node-gyp/12.16.3/include/node"
         ],
         "limitSymbolsToIncludedHeaders": true,
         "databaseFilename": ""

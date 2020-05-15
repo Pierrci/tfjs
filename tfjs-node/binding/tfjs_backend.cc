@@ -23,6 +23,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include "ctpl.h"
 #include "napi_auto_ref.h"
 #include "tf_auto_tensor.h"
 #include "tfe_auto_op.h"
@@ -771,8 +772,8 @@ void AssignOpAttr(napi_env env, TFE_Op *tfe_op, napi_value attr_value)
   }
 }
 
-TFJSBackend::TFJSBackend(napi_env env)
-    : next_tensor_id_(0), next_savedmodel_id_(0)
+TFJSBackend::TFJSBackend(napi_env env, int num_threads)
+    : next_tensor_id_(0), next_savedmodel_id_(0), pool(num_threads)
 {
   TF_AutoStatus tf_status;
   TFE_ContextOptions *tfe_options = TFE_NewContextOptions();
@@ -841,13 +842,17 @@ TFJSBackend::~TFJSBackend()
     TF_DeleteSession(kv.second.first, tf_status.status);
     TF_DeleteGraph(kv.second.second);
   }
+  for (auto &kv : tf_savedmodel_tsfn_)
+  {
+    napi_release_threadsafe_function(kv.second, napi_tsfn_abort);
+  }
   if (tfe_context_ != nullptr)
   {
     TFE_DeleteContext(tfe_context_);
   }
 }
 
-TFJSBackend *TFJSBackend::Create(napi_env env) { return new TFJSBackend(env); }
+TFJSBackend *TFJSBackend::Create(napi_env env, int num_threads) { return new TFJSBackend(env, num_threads); }
 
 int32_t TFJSBackend::InsertHandle(TFE_TensorHandle *tfe_handle)
 {
@@ -1127,10 +1132,31 @@ napi_value TFJSBackend::LoadSavedModel(napi_env env,
   }
 
   // TF_Session sessions[4];
+  auto savedmodel_id = InsertSavedModel(session, graph);
   napi_value output_session_id;
-  nstatus = napi_create_int32(env, InsertSavedModel(session, graph),
-                              &output_session_id);
+  nstatus = napi_create_int32(env, savedmodel_id, &output_session_id);
   printf("TF MAP SIZE: %i\n", tf_savedmodel_map_.size());
+
+  napi_value tsfn_name;
+  auto savedmodel_id_str = "savedmodel_" + std::to_string(savedmodel_id);
+  napi_create_string_utf8(env, savedmodel_id_str.c_str(), savedmodel_id_str.size(), &tsfn_name);
+
+  napi_threadsafe_function tsfn;
+  nstatus = napi_create_threadsafe_function(env,
+                                            NULL,
+                                            NULL,               // optional async object
+                                            tsfn_name,          // name of async operation
+                                            0,                  // max queue size
+                                            1,                  // initial thread count
+                                            NULL,               // thread finalize data
+                                            NULL,               // finalizer
+                                            NULL,               // context,
+                                            ParseSessionResult, // marshaller
+                                            &tsfn);
+  assert(nstatus == napi_ok);
+
+  tf_savedmodel_tsfn_.insert(std::make_pair(savedmodel_id, tsfn));
+  printf("tsfn inserted");
 
   // for (size_t i = 0; i < 4; i++)
   // {
@@ -1290,7 +1316,7 @@ napi_value TFJSBackend::RunSavedModelInternal(napi_env env,
   int32_t savedmodel_id;
   nstatus = napi_get_value_int32(env, savedmodel_id_value, &savedmodel_id);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
-  printf("Running SavedModel %i\n", savedmodel_id);
+  // printf("Running SavedModel %i\n", savedmodel_id);
 
   // Get corresponding SavedModel session and graph.
   auto savedmodel_entry = tf_savedmodel_map_.find(savedmodel_id);
@@ -1301,7 +1327,7 @@ napi_value TFJSBackend::RunSavedModelInternal(napi_env env,
     return nullptr;
   }
 
-  printf("Saved model retrieved\n");
+  // printf("Saved model retrieved\n");
 
   std::string input_op_names;
   nstatus = GetStringParam(env, input_op_names_value, input_op_names);
@@ -1437,7 +1463,7 @@ napi_value TFJSBackend::RunSavedModelInternal(napi_env env,
 
   std::vector<TF_Tensor *> output_values(outputs.size(), nullptr);
 
-  printf("Going to run session...\n");
+  // printf("Going to run session...\n");
 
   ThreadData *thread_data = new ThreadData(*this);
   // thread_data->env = env;
@@ -1449,21 +1475,35 @@ napi_value TFJSBackend::RunSavedModelInternal(napi_env env,
   thread_data->output_values = output_values;
   thread_data->output_op_name_array = output_op_name_array;
   thread_data->js_cb = js_cb;
+  thread_data->savedmodel_id = savedmodel_id;
   // thread_data->backend = this;
 
+  auto tsfn_entry = tf_savedmodel_tsfn_.find(savedmodel_id);
+  if (tsfn_entry == tf_savedmodel_tsfn_.end())
+  {
+    NAPI_THROW_ERROR(env, "TSFN not found (savedmodel_id: %d)",
+                     savedmodel_id);
+    return nullptr;
+  }
+
+  thread_data->tsfn = tsfn_entry->second;
+
+  auto f = pool.push(RunSession, thread_data);
+
   // uv_thread_create(thread, RunSession, thread_data);
-  // std::thread t = std::thread(RunSession, thread_data);
+  // thread_data->thread = std::thread(RunSession, thread_data);
+  // thread_data->thread.join();
 
-  napi_value work_name;
-  napi_create_string_utf8(env,
-                          "Running session",
-                          NAPI_AUTO_LENGTH,
-                          &work_name);
+  // napi_value work_name;
+  // napi_create_string_utf8(env,
+  //                         "Running session",
+  //                         NAPI_AUTO_LENGTH,
+  //                         &work_name);
 
-  napi_create_async_work(env, NULL, work_name, RunSession, ParseSessionResult, thread_data, &thread_data->work);
-  // printf("work created\n");
-  napi_queue_async_work(env, thread_data->work);
-  // printf("work queued\n");
+  // napi_create_async_work(env, NULL, work_name, RunSession, ParseSessionResult, thread_data, &thread_data->work);
+  // // printf("work created\n");
+  // napi_queue_async_work(env, thread_data->work);
+  // // printf("work queued\n");
 
   return nullptr;
 
@@ -1520,29 +1560,42 @@ napi_value TFJSBackend::GetNumOfSavedModels(napi_env env)
   return num_saved_models;
 }
 
-void RunSession(napi_env env, void *data)
+void RunSession(int id, ThreadData *data)
 {
   ThreadData *thread_data = (ThreadData *)data;
   TF_AutoStatus tf_status;
-  // napi_status nstatus;
+  napi_status nstatus;
 
-  // printf("INTO TFJS SESSION\n");
+  // printf("RunSession %i | %i\n", thread_data->savedmodel_id, id);
+  nstatus = napi_acquire_threadsafe_function(thread_data->tsfn);
+  assert(nstatus == napi_ok);
+
+  // auto session_result = new SessionResult();
+
+  // printf("RUNNING SESSION...\n");
   TF_SessionRun(thread_data->session, nullptr, thread_data->inputs.data(),
                 thread_data->input_values.data(), thread_data->num_input_ids, thread_data->outputs.data(),
                 thread_data->output_values.data(), thread_data->output_op_name_array.size(), nullptr, 0,
                 nullptr, thread_data->tf_status.status);
-  // printf("SESSION RAN\n");
+  // printf("SESSION RAN %i | %i\n", thread_data->savedmodel_id, id);
 
-  // printf("End of running model\n");
+  napi_call_threadsafe_function(thread_data->tsfn, thread_data, napi_tsfn_blocking);
+
+  nstatus = napi_release_threadsafe_function(thread_data->tsfn, napi_tsfn_release);
+  assert(nstatus == napi_ok);
+
+  // printf("End of running session\n");
 }
 
-void ParseSessionResult(napi_env env, napi_status status, void *data)
+void ParseSessionResult(napi_env env, napi_value js_callback, void *context, void *data)
 {
-  if (status != napi_ok)
-  {
-    printf("ERROR IN NAPI STATUS\n");
-    return;
-  }
+  // if (status != napi_ok)
+  // {
+  //   printf("ERROR IN NAPI STATUS\n");
+  //   return;
+  // }
+
+  // printf("Into parse session results\n");
 
   napi_status nstatus;
   ThreadData *thread_data = (ThreadData *)data;
@@ -1552,7 +1605,7 @@ void ParseSessionResult(napi_env env, napi_status status, void *data)
     // NAPI_THROW_ERROR(env, "Session fail to run with error: %s",
     //                  TF_Message(tf_status.status));
     // return null_thread;
-    printf("ERROR IN TF STATUS\n");
+    printf("ERROR IN TF STATUS: %s\n", TF_Message(thread_data->tf_status.status));
     return;
   }
 
@@ -1590,8 +1643,8 @@ void ParseSessionResult(napi_env env, napi_status status, void *data)
   // assert(status == napi_ok);
 
   napi_value global;
-  status = napi_get_global(env, &global);
-  assert(status == napi_ok);
+  nstatus = napi_get_global(env, &global);
+  assert(nstatus == napi_ok);
 
   // napi_valuetype type_result;
   // napi_typeof(env, thread_data->js_cb, &type_result);
@@ -1620,7 +1673,7 @@ void ParseSessionResult(napi_env env, napi_status status, void *data)
 
     // We must retrieve the last error info before doing anything else, because
     // doing anything else will replace the last error info.
-    status = napi_get_last_error_info(env, &info);
+    nstatus = napi_get_last_error_info(env, &info);
     const char *error_message = info->error_message != nullptr ? info->error_message : "Error in native callback";
     printf("ERROR: %s\n", error_message);
   }
@@ -1630,7 +1683,7 @@ void ParseSessionResult(napi_env env, napi_status status, void *data)
   // }
 
   napi_delete_reference(env, thread_data->js_cb);
-  napi_delete_async_work(env, thread_data->work);
+  // napi_delete_async_work(env, thread_data->work);
   free(thread_data);
 }
 

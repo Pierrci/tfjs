@@ -25,6 +25,7 @@
 #include <thread>
 #include <vector>
 #include <unordered_map>
+#include "ctpl.h"
 #include "tf_auto_status.h"
 #include "tensorflow/c/c_api.h"
 #include "tensorflow/c/eager/c_api.h"
@@ -37,7 +38,7 @@ class TFJSBackend
 public:
   // Creates, initializes, and returns a TFJSBackend instance. If initialization
   // fails, a nullptr is returned.
-  static TFJSBackend *Create(napi_env env);
+  static TFJSBackend *Create(napi_env env, int num_threads);
 
   // Creates a new Tensor with given shape and data and returns an ID that
   // refernces the new Tensor.
@@ -93,7 +94,7 @@ public:
   napi_value GenerateOutputTensorInfo(napi_env env, TFE_TensorHandle *handle);
 
 private:
-  TFJSBackend(napi_env env);
+  TFJSBackend(napi_env env, int num_threads);
   ~TFJSBackend();
 
   napi_value RunSavedModelInternal(napi_env env, napi_value saved_model_id,
@@ -109,9 +110,13 @@ private:
   std::unordered_map<int32_t, TFE_TensorHandle *> tfe_handle_map_;
   std::unordered_map<int32_t, std::pair<TF_Session *, TF_Graph *>>
       tf_savedmodel_map_;
+  std::unordered_map<int32_t, napi_threadsafe_function>
+      tf_savedmodel_tsfn_;
   int32_t next_tensor_id_;
   int32_t next_savedmodel_id_;
   std::string device_name;
+
+  ctpl::thread_pool pool;
 
 public:
   bool is_gpu_device;
@@ -131,13 +136,27 @@ struct ThreadData
   napi_async_work work;
   napi_ref js_cb;
   TFJSBackend &backend;
+  std::thread thread;
+  napi_threadsafe_function tsfn;
+  int savedmodel_id;
 
   ThreadData(TFJSBackend &bk) : backend{bk} {}
 };
 // ThreadData::ThreadData(const TFJSBackend &bk) : backend(bk) {};
 
-void RunSession(napi_env env, void *data);
-void ParseSessionResult(napi_env env, napi_status status, void *data);
+struct SessionResult
+{
+  std::vector<TF_Output> inputs;
+  std::vector<TF_Tensor *> input_values;
+  uint32_t num_input_ids;
+  std::vector<TF_Output> outputs;
+  std::vector<TF_Tensor *> output_values;
+  std::vector<const char *> output_op_name_array;
+  TF_AutoStatus tf_status;
+};
+
+void RunSession(int id, ThreadData *data);
+void ParseSessionResult(napi_env env, napi_value js_callback, void *context, void *data);
 } // namespace tfnodejs
 
 #endif // TF_NODEJS_TFJS_BACKEND_H_

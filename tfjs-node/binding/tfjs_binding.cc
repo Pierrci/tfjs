@@ -257,7 +257,8 @@ static napi_value InitTFNodeJSBinding(napi_env env, napi_value exports)
 
   printf("init!!!!");
 
-  gBackend = TFJSBackend::Create(env);
+  int num_threads = std::thread::hardware_concurrency();
+  gBackend = TFJSBackend::Create(env, num_threads);
   ENSURE_VALUE_IS_NOT_NULL_RETVAL(env, gBackend, nullptr);
 
   // TF version
