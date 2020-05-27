@@ -229,11 +229,13 @@ static napi_value GetNumOfSavedModels(napi_env env, napi_callback_info info) {
   return gBackend->GetNumOfSavedModels(env);
 }
 
-static napi_value InitTFNodeJSBinding(napi_env env, napi_value exports) {
+/*napi_value*/ NAPI_MODULE_INIT(/*napi_env env, napi_value exports*/) {
   napi_status nstatus;
 
-  gBackend = TFJSBackend::Create(env);
-  ENSURE_VALUE_IS_NOT_NULL_RETVAL(env, gBackend, nullptr);
+  if (gBackend == nullptr) {
+    gBackend = TFJSBackend::Create(env);
+    ENSURE_VALUE_IS_NOT_NULL_RETVAL(env, gBackend, nullptr);
+  }
 
   // TF version
   napi_value tf_version;
@@ -290,7 +292,5 @@ static napi_value InitTFNodeJSBinding(napi_env env, napi_value exports) {
 
   return exports;
 }
-
-NAPI_MODULE(tfe_binding, InitTFNodeJSBinding)
 
 }  // namespace tfnodejs
