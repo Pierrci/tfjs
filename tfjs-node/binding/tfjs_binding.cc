@@ -15,29 +15,45 @@
  * =============================================================================
  */
 
+// #ifndef NAPI_EXPERIMENTAL
+#define NAPI_EXPERIMENTAL
+
 #include <node_api.h>
 #include "tfjs_backend.h"
 #include "utils.h"
 
-namespace tfnodejs {
+namespace tfnodejs
+{
 
-TFJSBackend *gBackend = nullptr;
+typedef struct
+{
+  int val;
+  TFJSBackend *gBackend;
+} AddonData;
+
+// TFJSBackend *gBackend = nullptr;
 
 static void AssignIntProperty(napi_env env, napi_value exports,
-                              const char *name, int32_t value) {
+                              const char *name, int32_t value)
+{
   napi_value js_value;
   napi_status nstatus = napi_create_int32(env, value, &js_value);
   ENSURE_NAPI_OK(env, nstatus);
 
-  napi_property_descriptor property = {name,         nullptr, nullptr,
-                                       nullptr,      nullptr, js_value,
+  napi_property_descriptor property = {name, nullptr, nullptr,
+                                       nullptr, nullptr, js_value,
                                        napi_default, nullptr};
   nstatus = napi_define_properties(env, exports, 1, &property);
   ENSURE_NAPI_OK(env, nstatus);
 }
 
-static napi_value CreateTensor(napi_env env, napi_callback_info info) {
+static napi_value CreateTensor(napi_env env, napi_callback_info info)
+{
   napi_status nstatus;
+
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
 
   // Create tensor takes 3 params: shape, dtype, typed-array/array:
   size_t argc = 3;
@@ -46,7 +62,8 @@ static napi_value CreateTensor(napi_env env, napi_callback_info info) {
   nstatus = napi_get_cb_info(env, info, &argc, args, &js_this, nullptr);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
-  if (argc < 3) {
+  if (argc < 3)
+  {
     NAPI_THROW_ERROR(env,
                      "Invalid number of args passed to createTensor(). "
                      "Expecting 3 args but got %d.",
@@ -61,15 +78,21 @@ static napi_value CreateTensor(napi_env env, napi_callback_info info) {
   bool is_typed_array;
   nstatus = napi_is_typedarray(env, args[2], &is_typed_array);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
-  if (!is_typed_array) {
+  if (!is_typed_array)
+  {
     ENSURE_VALUE_IS_ARRAY_RETVAL(env, args[2], nullptr);
   }
 
-  return gBackend->CreateTensor(env, args[0], args[1], args[2]);
+  return addonData->gBackend->CreateTensor(env, args[0], args[1], args[2]);
 }
 
-static napi_value DeleteTensor(napi_env env, napi_callback_info info) {
+static napi_value DeleteTensor(napi_env env, napi_callback_info info)
+{
   napi_status nstatus;
+
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
 
   // Delete tensor takes 1 param: tensor ID;
   size_t argc = 1;
@@ -78,7 +101,8 @@ static napi_value DeleteTensor(napi_env env, napi_callback_info info) {
   nstatus = napi_get_cb_info(env, info, &argc, args, &js_this, nullptr);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, js_this);
 
-  if (argc < 1) {
+  if (argc < 1)
+  {
     NAPI_THROW_ERROR(env,
                      "Invalid number of args passed to deleteTensor(). "
                      "Expecting 1 arg but got %d.",
@@ -88,12 +112,17 @@ static napi_value DeleteTensor(napi_env env, napi_callback_info info) {
 
   ENSURE_VALUE_IS_NUMBER_RETVAL(env, args[0], js_this);
 
-  gBackend->DeleteTensor(env, args[0]);
+  addonData->gBackend->DeleteTensor(env, args[0]);
   return js_this;
 }
 
-static napi_value TensorDataSync(napi_env env, napi_callback_info info) {
+static napi_value TensorDataSync(napi_env env, napi_callback_info info)
+{
   napi_status nstatus;
+
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
 
   // Tensor data-sync takes 1 param: tensor ID;
   size_t argc = 1;
@@ -102,7 +131,8 @@ static napi_value TensorDataSync(napi_env env, napi_callback_info info) {
   nstatus = napi_get_cb_info(env, info, &argc, args, &js_this, nullptr);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, js_this);
 
-  if (argc < 1) {
+  if (argc < 1)
+  {
     NAPI_THROW_ERROR(env,
                      "Invalid number of args passed to tensorDataSync(). "
                      "Expecting 1 arg but got %d.",
@@ -112,11 +142,16 @@ static napi_value TensorDataSync(napi_env env, napi_callback_info info) {
 
   ENSURE_VALUE_IS_NUMBER_RETVAL(env, args[0], js_this);
 
-  return gBackend->GetTensorData(env, args[0]);
+  return addonData->gBackend->GetTensorData(env, args[0]);
 }
 
-static napi_value ExecuteOp(napi_env env, napi_callback_info info) {
+static napi_value ExecuteOp(napi_env env, napi_callback_info info)
+{
   napi_status nstatus;
+
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
 
   // Create tensor takes 4 params: op-name, op-attrs, input-tensor-ids,
   // num-outputs:
@@ -126,7 +161,8 @@ static napi_value ExecuteOp(napi_env env, napi_callback_info info) {
   nstatus = napi_get_cb_info(env, info, &argc, args, &js_this, nullptr);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
-  if (argc < 4) {
+  if (argc < 4)
+  {
     NAPI_THROW_ERROR(env,
                      "Invalid number of args passed to executeOp(). Expecting "
                      "4 args but got %d.",
@@ -139,21 +175,33 @@ static napi_value ExecuteOp(napi_env env, napi_callback_info info) {
   ENSURE_VALUE_IS_ARRAY_RETVAL(env, args[2], nullptr);
   ENSURE_VALUE_IS_NUMBER_RETVAL(env, args[3], nullptr);
 
-  return gBackend->ExecuteOp(env, args[0], args[1], args[2], args[3]);
+  return addonData->gBackend->ExecuteOp(env, args[0], args[1], args[2], args[3]);
 }
 
-static napi_value IsUsingGPUDevice(napi_env env, napi_callback_info info) {
+static napi_value IsUsingGPUDevice(napi_env env, napi_callback_info info)
+{
   napi_value result;
 
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
+
   napi_status nstatus;
-  nstatus = napi_get_boolean(env, gBackend->is_gpu_device, &result);
+  nstatus = napi_get_boolean(env, addonData->gBackend->is_gpu_device, &result);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
   return result;
 }
 
-static napi_value LoadSavedModel(napi_env env, napi_callback_info info) {
+static napi_value LoadSavedModel(napi_env env, napi_callback_info info)
+{
   napi_status nstatus;
+
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
+  // printf("VAL LOAD: %i\n", addonData->val);
+  // printf("BACK LOAD: %i\n", gBackend->randn);
 
   // Load saved model takes 2 params: export_dir, tags:
   size_t argc = 2;
@@ -162,7 +210,8 @@ static napi_value LoadSavedModel(napi_env env, napi_callback_info info) {
   nstatus = napi_get_cb_info(env, info, &argc, args, &js_this, nullptr);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
-  if (argc < 2) {
+  if (argc < 2)
+  {
     NAPI_THROW_ERROR(env,
                      "Invalid number of args passed to LoadSavedModel(). "
                      "Expecting 2 args but got %d.",
@@ -173,11 +222,16 @@ static napi_value LoadSavedModel(napi_env env, napi_callback_info info) {
   ENSURE_VALUE_IS_STRING_RETVAL(env, args[0], nullptr);
   ENSURE_VALUE_IS_STRING_RETVAL(env, args[1], nullptr);
 
-  return gBackend->LoadSavedModel(env, args[0], args[1]);
+  return addonData->gBackend->LoadSavedModel(env, args[0], args[1]);
 }
 
-static napi_value DeleteSavedModel(napi_env env, napi_callback_info info) {
+static napi_value DeleteSavedModel(napi_env env, napi_callback_info info)
+{
   napi_status nstatus;
+
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
 
   // Delete SavedModel takes 1 param: savedModel ID;
   size_t argc = 1;
@@ -186,7 +240,8 @@ static napi_value DeleteSavedModel(napi_env env, napi_callback_info info) {
   nstatus = napi_get_cb_info(env, info, &argc, args, &js_this, nullptr);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, js_this);
 
-  if (argc < 1) {
+  if (argc < 1)
+  {
     NAPI_THROW_ERROR(env,
                      "Invalid number of args passed to deleteSavedModel(). "
                      "Expecting 1 arg but got %d.",
@@ -196,12 +251,19 @@ static napi_value DeleteSavedModel(napi_env env, napi_callback_info info) {
 
   ENSURE_VALUE_IS_NUMBER_RETVAL(env, args[0], js_this);
 
-  gBackend->DeleteSavedModel(env, args[0]);
+  addonData->gBackend->DeleteSavedModel(env, args[0]);
   return js_this;
 }
 
-static napi_value RunSavedModel(napi_env env, napi_callback_info info) {
+static napi_value RunSavedModel(napi_env env, napi_callback_info info)
+{
   napi_status nstatus;
+
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
+  // printf("VAL RUN: %i\n", addonData->val);
+  // printf("BACK RUN: %i\n", gBackend->randn);
 
   // Run SavedModel takes 4 params: session_id, input_tensor_ids,
   // input_op_names, output_op_names.
@@ -211,7 +273,8 @@ static napi_value RunSavedModel(napi_env env, napi_callback_info info) {
   nstatus = napi_get_cb_info(env, info, &argc, args, &js_this, nullptr);
   ENSURE_NAPI_OK_RETVAL(env, nstatus, nullptr);
 
-  if (argc < 4) {
+  if (argc < 4)
+  {
     NAPI_THROW_ERROR(env, "Invalid number of args passed to RunSavedModel()");
     return nullptr;
   }
@@ -221,19 +284,42 @@ static napi_value RunSavedModel(napi_env env, napi_callback_info info) {
   ENSURE_VALUE_IS_STRING_RETVAL(env, args[2], nullptr);
   ENSURE_VALUE_IS_STRING_RETVAL(env, args[3], nullptr);
 
-  return gBackend->RunSavedModel(env, args[0], args[1], args[2], args[3]);
+  return addonData->gBackend->RunSavedModel(env, args[0], args[1], args[2], args[3]);
 }
 
-static napi_value GetNumOfSavedModels(napi_env env, napi_callback_info info) {
+static napi_value GetNumOfSavedModels(napi_env env, napi_callback_info info)
+{
+  void *data;
+  napi_get_instance_data(env, &data);
+  AddonData *addonData = (AddonData *)data;
   // Delete SavedModel takes 0 param;
-  return gBackend->GetNumOfSavedModels(env);
+  return addonData->gBackend->GetNumOfSavedModels(env);
 }
 
-static napi_value InitTFNodeJSBinding(napi_env env, napi_value exports) {
+// static napi_value InitTFNodeJSBinding(napi_env env, napi_value exports)
+/*napi_value*/ NAPI_MODULE_INIT(/*napi_env env, napi_value exports*/)
+{
   napi_status nstatus;
+  AddonData *t = new AddonData();
+  t->val = rand() % 100;
 
-  gBackend = TFJSBackend::Create(env);
-  ENSURE_VALUE_IS_NOT_NULL_RETVAL(env, gBackend, nullptr);
+  printf("INIT\n\n");
+  // printf("ALREADY DEFINED: %d\n", gBackend != nullptr);
+  // if (gBackend != nullptr)
+  // {
+  //   printf("BEFORE: %i\n", gBackend->randn);
+  // }
+  // else
+  // {
+  //   gBackend = TFJSBackend::Create(env);
+  //   ENSURE_VALUE_IS_NOT_NULL_RETVAL(env, gBackend, nullptr);
+  // }
+
+  // printf("AFTER: %i\n", gBackend->randn);
+
+  t->gBackend = TFJSBackend::Create(env);
+  ;
+  napi_set_instance_data(env, t, NULL, NULL);
 
   // TF version
   napi_value tf_version;
@@ -291,6 +377,6 @@ static napi_value InitTFNodeJSBinding(napi_env env, napi_value exports) {
   return exports;
 }
 
-NAPI_MODULE(tfe_binding, InitTFNodeJSBinding)
+// NAPI_MODULE(tfe_binding, InitTFNodeJSBinding)
 
-}  // namespace tfnodejs
+} // namespace tfnodejs
