@@ -696,9 +696,6 @@ void AssignOpAttr(napi_env env, TFE_Op *tfe_op, napi_value attr_value) {
 
 TFJSBackend::TFJSBackend(napi_env env)
     : next_tensor_id_(0), next_savedmodel_id_(0) {
-
-  randn = rand() % 100;
-
   TF_AutoStatus tf_status;
   TFE_ContextOptions *tfe_options = TFE_NewContextOptions();
   tfe_context_ = TFE_NewContext(tfe_options, tf_status.status);
